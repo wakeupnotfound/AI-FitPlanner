@@ -684,7 +684,7 @@ export GIN_MODE=release
 
 ## 📞 联系方式
 
-- **项目负责人**: [Your Name](mailto:your.email@example.com)
+- **项目负责人**: [Heng Ju](mailto:gzlhomlj@gmail.com)
 - **技术团队**: [tech@fitness.ai](mailto:tech@fitness.ai)
 - **Bug反馈**: [Issues](../../issues)
 - **功能建议**: [Discussions](../../discussions)
