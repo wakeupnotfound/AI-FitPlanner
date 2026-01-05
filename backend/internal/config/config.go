@@ -7,20 +7,20 @@ import (
 )
 
 type Config struct {
-	App      AppConfig      `mapstructure:"app"`
-	Database DatabaseConfig `mapstructure:"database"`
-	JWT      JWTConfig      `mapstructure:"jwt"`
-	AI       AIConfig       `mapstructure:"ai"`
+	App       AppConfig       `mapstructure:"app"`
+	Database  DatabaseConfig  `mapstructure:"database"`
+	JWT       JWTConfig       `mapstructure:"jwt"`
+	AI        AIConfig        `mapstructure:"ai"`
 	RateLimit RateLimitConfig `mapstructure:"rate_limit"`
-	Log      LogConfig      `mapstructure:"log"`
+	Log       LogConfig       `mapstructure:"log"`
 }
 
 type AppConfig struct {
-	Name       string `mapstructure:"name"`
-	Version    string `mapstructure:"version"`
-	Port       int    `mapstructure:"port"`
-	Mode       string `mapstructure:"mode"`
-	SecretKey  string `mapstructure:"secret_key"`
+	Name      string `mapstructure:"name"`
+	Version   string `mapstructure:"version"`
+	Port      int    `mapstructure:"port"`
+	Mode      string `mapstructure:"mode"`
+	SecretKey string `mapstructure:"secret_key"`
 }
 
 type DatabaseConfig struct {
@@ -40,18 +40,18 @@ type MySQLConfig struct {
 }
 
 type RedisConfig struct {
-	Host        string `mapstructure:"host"`
-	Port        int    `mapstructure:"port"`
-	Password    string `mapstructure:"password"`
-	DB          int    `mapstructure:"db"`
-	PoolSize    int    `mapstructure:"pool_size"`
-	MaxRetries  int    `mapstructure:"max_retries"`
+	Host       string `mapstructure:"host"`
+	Port       int    `mapstructure:"port"`
+	Password   string `mapstructure:"password"`
+	DB         int    `mapstructure:"db"`
+	PoolSize   int    `mapstructure:"pool_size"`
+	MaxRetries int    `mapstructure:"max_retries"`
 }
 
 type JWTConfig struct {
-	Secret               string        `mapstructure:"secret"`
-	AccessTokenExpire    time.Duration `mapstructure:"access_token_expire"`
-	RefreshTokenExpire   time.Duration `mapstructure:"refresh_token_expire"`
+	Secret             string        `mapstructure:"secret"`
+	AccessTokenExpire  time.Duration `mapstructure:"access_token_expire"`
+	RefreshTokenExpire time.Duration `mapstructure:"refresh_token_expire"`
 }
 
 type AIConfig struct {

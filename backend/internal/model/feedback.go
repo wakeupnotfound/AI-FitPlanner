@@ -26,17 +26,17 @@ func (FeedbackRecord) TableName() string {
 type FeedbackType string
 
 const (
-	FeedbackTypeGeneral   FeedbackType = "general"
+	FeedbackTypeGeneral    FeedbackType = "general"
 	FeedbackTypeDifficulty FeedbackType = "difficulty"
-	FeedbackEffectiveness FeedbackType = "effectiveness"
-	FeedbackSafety        FeedbackType = "safety"
+	FeedbackEffectiveness  FeedbackType = "effectiveness"
+	FeedbackSafety         FeedbackType = "safety"
 )
 
 type FeedbackData struct {
-	PlanQuality   int    `json:"plan_quality"`
-	ExerciseVariety int  `json:"exercise_variety"`
+	PlanQuality     int    `json:"plan_quality"`
+	ExerciseVariety int    `json:"exercise_variety"`
 	DifficultyFit   bool   `json:"difficulty_fit"`
 	TimeReasonable  bool   `json:"time_reasonable"`
-	Comments      string `json:"comments"`
-	Suggestions   string `json:"suggestions"`
+	Comments        string `json:"comments"`
+	Suggestions     string `json:"suggestions"`
 }

@@ -1,0 +1,339 @@
+basePath: /api/v1
+definitions:
+  github_com_ai-fitness-planner_backend_internal_api_request.LoginRequest:
+    properties:
+      password:
+        type: string
+      username:
+        description: 用户名或邮箱
+        type: string
+    required:
+    - password
+    - username
+    type: object
+  github_com_ai-fitness-planner_backend_internal_api_request.RefreshTokenRequest:
+    properties:
+      refresh_token:
+        type: string
+    required:
+    - refresh_token
+    type: object
+  github_com_ai-fitness-planner_backend_internal_api_request.RegisterRequest:
+    properties:
+      confirm_password:
+        type: string
+      email:
+        type: string
+      password:
+        maxLength: 20
+        minLength: 8
+        type: string
+      username:
+        maxLength: 20
+        minLength: 3
+        type: string
+    required:
+    - confirm_password
+    - email
+    - password
+    - username
+    type: object
+  github_com_ai-fitness-planner_backend_internal_api_response.AuthResponse:
+    properties:
+      access_token:
+        type: string
+      expires_in:
+        type: integer
+      refresh_token:
+        type: string
+      user:
+        $ref: '#/definitions/github_com_ai-fitness-planner_backend_internal_api_response.UserInfo'
+    type: object
+  github_com_ai-fitness-planner_backend_internal_api_response.BaseResponse:
+    properties:
+      code:
+        type: integer
+      data: {}
+      message:
+        type: string
+      timestamp:
+        type: integer
+    type: object
+  github_com_ai-fitness-planner_backend_internal_api_response.BodyDataInfo:
+    properties:
+      age:
+        type: integer
+      body_fat_percentage:
+        type: number
+      created_at:
+        type: string
+      gender:
+        type: string
+      height:
+        type: number
+      id:
+        type: integer
+      measurement_date:
+        type: string
+      muscle_percentage:
+        type: number
+      weight:
+        type: number
+    type: object
+  github_com_ai-fitness-planner_backend_internal_api_response.GoalInfo:
+    properties:
+      created_at:
+        type: string
+      deadline:
+        type: string
+      goal_description:
+        type: string
+      goal_type:
+        type: string
+      id:
+        type: integer
+      priority:
+        type: integer
+      status:
+        type: string
+      target_weight:
+        type: number
+    type: object
+  github_com_ai-fitness-planner_backend_internal_api_response.RefreshTokenResponse:
+    properties:
+      access_token:
+        type: string
+      expires_in:
+        type: integer
+    type: object
+  github_com_ai-fitness-planner_backend_internal_api_response.UserInfo:
+    properties:
+      avatar:
+        type: string
+      created_at:
+        type: string
+      email:
+        type: string
+      id:
+        type: integer
+      phone:
+        type: string
+      username:
+        type: string
+    type: object
+  github_com_ai-fitness-planner_backend_internal_api_response.UserProfileResponse:
+    properties:
+      body_data:
+        items:
+          $ref: '#/definitions/github_com_ai-fitness-planner_backend_internal_api_response.BodyDataInfo'
+        type: array
+      goals:
+        items:
+          $ref: '#/definitions/github_com_ai-fitness-planner_backend_internal_api_response.GoalInfo'
+        type: array
+      user:
+        $ref: '#/definitions/github_com_ai-fitness-planner_backend_internal_api_response.UserInfo'
+    type: object
+  internal_handler.HealthResponse:
+    properties:
+      services:
+        additionalProperties:
+          type: string
+        type: object
+      status:
+        type: string
+      timestamp:
+        type: integer
+    type: object
+host: localhost:8080
+info:
+  contact:
+    email: support@ai-fitness-planner.com
+    name: API Support
+  description: RESTful API for AI-powered fitness and nutrition planning system. Users
+    can configure their own AI APIs (OpenAI, Wenxin, Tongyi) to generate personalized
+    training and nutrition plans.
+  title: AI Fitness Planning System API
+  version: "1.0"
+paths:
+  /auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Authenticate user with username/email and password
+      parameters:
+      - description: Login credentials
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_ai-fitness-planner_backend_internal_api_request.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Login successful
+          schema:
+            $ref: '#/definitions/github_com_ai-fitness-planner_backend_internal_api_response.AuthResponse'
+        "400":
+          description: Invalid input
+          schema:
+            $ref: '#/definitions/github_com_ai-fitness-planner_backend_internal_api_response.BaseResponse'
+        "401":
+          description: Invalid credentials
+          schema:
+            $ref: '#/definitions/github_com_ai-fitness-planner_backend_internal_api_response.BaseResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/github_com_ai-fitness-planner_backend_internal_api_response.BaseResponse'
+      summary: User login
+      tags:
+      - Authentication
+  /auth/logout:
+    post:
+      consumes:
+      - application/json
+      description: Invalidate current user session
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Logout successful
+          schema:
+            $ref: '#/definitions/github_com_ai-fitness-planner_backend_internal_api_response.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_ai-fitness-planner_backend_internal_api_response.BaseResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/github_com_ai-fitness-planner_backend_internal_api_response.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: User logout
+      tags:
+      - Authentication
+  /auth/refresh:
+    post:
+      consumes:
+      - application/json
+      description: Get a new access token using refresh token
+      parameters:
+      - description: Refresh token
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_ai-fitness-planner_backend_internal_api_request.RefreshTokenRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Token refreshed successfully
+          schema:
+            $ref: '#/definitions/github_com_ai-fitness-planner_backend_internal_api_response.RefreshTokenResponse'
+        "400":
+          description: Invalid input
+          schema:
+            $ref: '#/definitions/github_com_ai-fitness-planner_backend_internal_api_response.BaseResponse'
+        "401":
+          description: Invalid refresh token
+          schema:
+            $ref: '#/definitions/github_com_ai-fitness-planner_backend_internal_api_response.BaseResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/github_com_ai-fitness-planner_backend_internal_api_response.BaseResponse'
+      summary: Refresh access token
+      tags:
+      - Authentication
+  /auth/register:
+    post:
+      consumes:
+      - application/json
+      description: Create a new user account with username, email, and password
+      parameters:
+      - description: Registration details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_ai-fitness-planner_backend_internal_api_request.RegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: User registered successfully
+          schema:
+            $ref: '#/definitions/github_com_ai-fitness-planner_backend_internal_api_response.AuthResponse'
+        "400":
+          description: Invalid input
+          schema:
+            $ref: '#/definitions/github_com_ai-fitness-planner_backend_internal_api_response.BaseResponse'
+        "409":
+          description: Username or email already exists
+          schema:
+            $ref: '#/definitions/github_com_ai-fitness-planner_backend_internal_api_response.BaseResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/github_com_ai-fitness-planner_backend_internal_api_response.BaseResponse'
+      summary: Register a new user
+      tags:
+      - Authentication
+  /health:
+    get:
+      description: Check the health status of the API and its dependencies
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Service is healthy
+          schema:
+            $ref: '#/definitions/internal_handler.HealthResponse'
+        "503":
+          description: Service is unhealthy
+          schema:
+            $ref: '#/definitions/internal_handler.HealthResponse'
+      summary: Health check
+      tags:
+      - System
+  /user/profile:
+    get:
+      description: Get the authenticated user's profile information
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: User profile retrieved successfully
+          schema:
+            $ref: '#/definitions/github_com_ai-fitness-planner_backend_internal_api_response.UserProfileResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/github_com_ai-fitness-planner_backend_internal_api_response.BaseResponse'
+        "404":
+          description: User not found
+          schema:
+            $ref: '#/definitions/github_com_ai-fitness-planner_backend_internal_api_response.BaseResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/github_com_ai-fitness-planner_backend_internal_api_response.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Get user profile
+      tags:
+      - User
+schemes:
+- http
+- https
+securityDefinitions:
+  BearerAuth:
+    description: Type "Bearer" followed by a space and JWT token.
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

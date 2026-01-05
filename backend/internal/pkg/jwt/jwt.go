@@ -1,113 +1,171 @@
 package jwt
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
+	"time"
+
 	"github.com/ai-fitness-planner/backend/internal/config"
 	"github.com/golang-jwt/jwt/v5"
-	"time"
 )
 
+// Claims represents JWT claims with user information
 type Claims struct {
 	UserID    int64  `json:"user_id"`
 	Username  string `json:"username"`
 	SessionID string `json:"session_id"`
+	Type      string `json:"type"` // "access" or "refresh"
 	jwt.RegisteredClaims
 }
 
-func GenerateToken(userID int64, username string) (accessToken, refreshToken string, err error) {
-	jwtConfig := config.GlobalConfig.JWT
-
-	// Access Token Claims
-	accessClaims := Claims{
-		UserID:    userID,
-		Username:  username,
-		SessionID: generateSessionID(),
-		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(jwtConfig.AccessTokenExpire)),
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
-			NotBefore: jwt.NewNumericDate(time.Now()),
-			Issuer:    "ai-fitness-planner",
-		},
-	}
-
-	// Refresh Token Claims
-	refreshClaims := Claims{
-		UserID:    userID,
-		Username:  username,
-		SessionID: accessClaims.SessionID, // 使用相同的sessionID
-		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(jwtConfig.RefreshTokenExpire)),
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
-			NotBefore: jwt.NewNumericDate(time.Now()),
-			Issuer:    "ai-fitness-planner",
-		},
-	}
-
-	// 生成Access Token
-	accessToken, err = jwt.NewWithClaims(jwt.SigningMethodHS256, accessClaims).SignedString([]byte(jwtConfig.Secret))
-	if err != nil {
-		return "", "", fmt.Errorf("生成access token失败: %w", err)
-	}
-
-	// 生成Refresh Token
-	refreshToken, err = jwt.NewWithClaims(jwt.SigningMethodHS256, refreshClaims).SignedString([]byte(jwtConfig.Secret))
-	if err != nil {
-		return "", "", fmt.Errorf("生成refresh token失败: %w", err)
-	}
-
-	return accessToken, refreshToken, nil
+// JWTManager interface defines methods for JWT token management
+type JWTManager interface {
+	GenerateAccessToken(userID int64, username string) (string, error)
+	GenerateRefreshToken(userID int64, username string) (string, error)
+	ValidateToken(tokenString string) (*Claims, error)
+	RefreshAccessToken(refreshToken string) (string, error)
 }
 
-func ParseToken(tokenString string) (*Claims, error) {
-	jwtConfig := config.GlobalConfig.JWT
+// DefaultJWTManager implements the JWTManager interface
+type DefaultJWTManager struct {
+	secret             string
+	accessTokenExpire  time.Duration
+	refreshTokenExpire time.Duration
+}
 
+// NewJWTManager creates a new JWT manager with configuration
+func NewJWTManager(secret string, accessExpire, refreshExpire time.Duration) JWTManager {
+	return &DefaultJWTManager{
+		secret:             secret,
+		accessTokenExpire:  accessExpire,
+		refreshTokenExpire: refreshExpire,
+	}
+}
+
+// NewJWTManagerFromConfig creates a new JWT manager from global config
+func NewJWTManagerFromConfig() JWTManager {
+	jwtConfig := config.GlobalConfig.JWT
+	return NewJWTManager(
+		jwtConfig.Secret,
+		jwtConfig.AccessTokenExpire,
+		jwtConfig.RefreshTokenExpire,
+	)
+}
+
+// GenerateAccessToken generates a new access token for the user
+func (m *DefaultJWTManager) GenerateAccessToken(userID int64, username string) (string, error) {
+	sessionID := generateSessionID()
+
+	claims := Claims{
+		UserID:    userID,
+		Username:  username,
+		SessionID: sessionID,
+		Type:      "access",
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(m.accessTokenExpire)),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			NotBefore: jwt.NewNumericDate(time.Now()),
+			Issuer:    "ai-fitness-planner",
+		},
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokenString, err := token.SignedString([]byte(m.secret))
+	if err != nil {
+		return "", fmt.Errorf("failed to generate access token: %w", err)
+	}
+
+	return tokenString, nil
+}
+
+// GenerateRefreshToken generates a new refresh token for the user
+func (m *DefaultJWTManager) GenerateRefreshToken(userID int64, username string) (string, error) {
+	sessionID := generateSessionID()
+
+	claims := Claims{
+		UserID:    userID,
+		Username:  username,
+		SessionID: sessionID,
+		Type:      "refresh",
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(m.refreshTokenExpire)),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			NotBefore: jwt.NewNumericDate(time.Now()),
+			Issuer:    "ai-fitness-planner",
+		},
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokenString, err := token.SignedString([]byte(m.secret))
+	if err != nil {
+		return "", fmt.Errorf("failed to generate refresh token: %w", err)
+	}
+
+	return tokenString, nil
+}
+
+// ValidateToken validates a token and returns its claims
+func (m *DefaultJWTManager) ValidateToken(tokenString string) (*Claims, error) {
 	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
-		return []byte(jwtConfig.Secret), nil
+		return []byte(m.secret), nil
 	})
 
 	if err != nil {
-		return nil, fmt.Errorf("解析token失败: %w", err)
+		return nil, fmt.Errorf("failed to parse token: %w", err)
 	}
 
 	if claims, ok := token.Claims.(*Claims); ok && token.Valid {
 		return claims, nil
 	}
 
-	return nil, fmt.Errorf("无效的token")
+	return nil, fmt.Errorf("invalid token")
 }
 
-func RefreshAccessToken(refreshToken string) (newAccessToken string, err error) {
-	claims, err := ParseToken(refreshToken)
+// RefreshAccessToken generates a new access token from a valid refresh token
+func (m *DefaultJWTManager) RefreshAccessToken(refreshToken string) (string, error) {
+	claims, err := m.ValidateToken(refreshToken)
 	if err != nil {
-		return "", fmt.Errorf("刷新token无效: %w", err)
+		return "", fmt.Errorf("invalid refresh token: %w", err)
 	}
 
-	jwtConfig := config.GlobalConfig.JWT
+	// Verify it's a refresh token
+	if claims.Type != "refresh" {
+		return "", fmt.Errorf("token is not a refresh token")
+	}
 
-	// 生成新的Access Token
+	// Generate new access token with the same session ID
 	accessClaims := Claims{
 		UserID:    claims.UserID,
 		Username:  claims.Username,
-		SessionID: claims.SessionID, // 保持相同的sessionID
+		SessionID: claims.SessionID,
+		Type:      "access",
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(jwtConfig.AccessTokenExpire)),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(m.accessTokenExpire)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			NotBefore: jwt.NewNumericDate(time.Now()),
 			Issuer:    "ai-fitness-planner",
 		},
 	}
 
-	newAccessToken, err = jwt.NewWithClaims(jwt.SigningMethodHS256, accessClaims).SignedString([]byte(jwtConfig.Secret))
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, accessClaims)
+	newAccessToken, err := token.SignedString([]byte(m.secret))
 	if err != nil {
-		return "", fmt.Errorf("生成新的access token失败: %w", err)
+		return "", fmt.Errorf("failed to generate new access token: %w", err)
 	}
 
 	return newAccessToken, nil
 }
 
+// generateSessionID generates a unique session ID using crypto/rand
 func generateSessionID() string {
-	return fmt.Sprintf("session_%d", time.Now().UnixNano())
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		// Fallback to timestamp-based ID if random generation fails
+		return fmt.Sprintf("session_%d", time.Now().UnixNano())
+	}
+	return hex.EncodeToString(b)
 }

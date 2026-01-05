@@ -24,16 +24,16 @@ func (PromptTemplate) TableName() string {
 type PromptCategory string
 
 const (
-	PromptCategoryTraining  PromptCategory = "training"
-	PromptCategoryNutrition PromptCategory = "nutrition"
+	PromptCategoryTraining   PromptCategory = "training"
+	PromptCategoryNutrition  PromptCategory = "nutrition"
 	PromptCategoryAssessment PromptCategory = "assessment"
-	PromptCategorySafety    PromptCategory = "safety"
+	PromptCategorySafety     PromptCategory = "safety"
 )
 
 type TemplateVariable struct {
-	Name        string `json:"name"`
-	Type        string `json:"type"`
-	Description string `json:"description"`
-	Required    bool   `json:"required"`
+	Name         string      `json:"name"`
+	Type         string      `json:"type"`
+	Description  string      `json:"description"`
+	Required     bool        `json:"required"`
 	DefaultValue interface{} `json:"default_value,omitempty"`
 }

@@ -1,0 +1,299 @@
+# ============================================================================
+# AI Fitness Planner Backend - Docker Compose Configuration
+# ============================================================================
+# This Docker Compose file sets up the complete development/production stack:
+# - MySQL: Primary database for persistent data storage
+# - Redis: Cache and session store for authentication and rate limiting
+# - API: Go backend service
+#
+# Usage:
+#   Development: docker-compose up -d
+#   Production:  docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#   Stop:        docker-compose down
+#   Clean:       docker-compose down -v (removes volumes)
+#
+# Validates: Requirements 11.1, 11.2
+# ============================================================================
+
+version: '3.8'
+
+services:
+  # --------------------------------------------------------------------------
+  # MySQL Database Service
+  # --------------------------------------------------------------------------
+  # Primary database for storing user data, training plans, nutrition records,
+  # assessments, and all persistent application data
+  mysql:
+    image: mysql:8.0
+    container_name: fitness_mysql
+    restart: unless-stopped
+    
+    # Environment variables for MySQL initialization
+    environment:
+      # Root password for MySQL admin access
+      # IMPORTANT: Change in production!
+      MYSQL_ROOT_PASSWORD: root_password
+      
+      # Application database name (auto-created on first run)
+      MYSQL_DATABASE: fitness_planner
+      
+      # Application database user (auto-created on first run)
+      MYSQL_USER: fitness_user
+      
+      # Application database password
+      # IMPORTANT: Change in production!
+      MYSQL_PASSWORD: fitness_password
+      
+      # Set timezone to UTC for consistent timestamps
+      TZ: UTC
+    
+    # Expose MySQL port to host (for development access)
+    # Remove in production if not needed
+    ports:
+      - "3306:3306"
+    
+    # Persistent volumes for data and initialization scripts
+    volumes:
+      # MySQL data directory (persists database across container restarts)
+      - mysql_data:/var/lib/mysql
+      
+      # Database schema initialization script
+      # Automatically runs on first container start
+      - ../database/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
+      
+      # MySQL configuration file (optional)
+      # - ./mysql.cnf:/etc/mysql/conf.d/custom.cnf:ro
+    
+    # Network configuration
+    networks:
+      - fitness_network
+    
+    # Health check to ensure MySQL is ready before starting dependent services
+    # Validates: Requirements 11.1, 11.3
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot_password"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    
+    # Resource limits (optional, uncomment for production)
+    # deploy:
+    #   resources:
+    #     limits:
+    #       cpus: '2'
+    #       memory: 2G
+    #     reservations:
+    #       cpus: '1'
+    #       memory: 1G
+
+  # --------------------------------------------------------------------------
+  # Redis Cache Service
+  # --------------------------------------------------------------------------
+  # In-memory data store for session management, rate limiting, and caching
+  # Validates: Requirements 1.5, 9.2, 9.6
+  redis:
+    image: redis:7-alpine
+    container_name: fitness_redis
+    restart: unless-stopped
+    
+    # Redis command with persistence enabled
+    # appendonly: Enable AOF (Append Only File) for data persistence
+    # appendfsync everysec: Sync to disk every second (balance between performance and durability)
+    command: redis-server --appendonly yes --appendfsync everysec
+    
+    # Environment variables
+    environment:
+      TZ: UTC
+    
+    # Expose Redis port to host (for development access)
+    # Remove in production if not needed
+    ports:
+      - "6379:6379"
+    
+    # Persistent volume for Redis data
+    volumes:
+      # Redis data directory (persists cache and sessions across restarts)
+      - redis_data:/data
+      
+      # Redis configuration file (optional)
+      # - ./redis.conf:/usr/local/etc/redis/redis.conf:ro
+    
+    # Network configuration
+    networks:
+      - fitness_network
+    
+    # Health check to ensure Redis is ready
+    # Validates: Requirements 11.2, 11.3
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    
+    # Resource limits (optional, uncomment for production)
+    # deploy:
+    #   resources:
+    #     limits:
+    #       cpus: '1'
+    #       memory: 512M
+    #     reservations:
+    #       cpus: '0.5'
+    #       memory: 256M
+
+  # --------------------------------------------------------------------------
+  # API Service (Go Backend)
+  # --------------------------------------------------------------------------
+  # Main application service providing RESTful API endpoints
+  api:
+    # Build from local Dockerfile
+    build:
+      context: .
+      dockerfile: Dockerfile
+      # Build arguments (optional)
+      # args:
+      #   GO_VERSION: 1.21
+    
+    container_name: fitness_api
+    restart: unless-stopped
+    
+    # Expose API port to host
+    ports:
+      - "8080:8080"
+    
+    # Environment variables override config.yaml settings
+    # Use service names (mysql, redis) for Docker network communication
+    environment:
+      # Application settings
+      - FITNESS_APP_MODE=debug
+      - FITNESS_APP_PORT=8080
+      
+      # Database connections (use service names in Docker network)
+      - FITNESS_DATABASE_MYSQL_HOST=mysql
+      - FITNESS_DATABASE_MYSQL_PORT=3306
+      - FITNESS_DATABASE_MYSQL_USER=fitness_user
+      - FITNESS_DATABASE_MYSQL_PASSWORD=fitness_password
+      - FITNESS_DATABASE_MYSQL_DBNAME=fitness_planner
+      
+      - FITNESS_DATABASE_REDIS_HOST=redis
+      - FITNESS_DATABASE_REDIS_PORT=6379
+      
+      # Timezone
+      - TZ=UTC
+      
+      # Optional: Override other settings
+      # - FITNESS_JWT_SECRET=your-production-jwt-secret
+      # - FITNESS_APP_SECRET_KEY=your-production-secret-key
+      # - FITNESS_LOG_LEVEL=info
+    
+    # Service dependencies with health checks
+    # API waits for MySQL and Redis to be healthy before starting
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    
+    # Network configuration
+    networks:
+      - fitness_network
+    
+    # Volumes for configuration and logs
+    volumes:
+      # Mount configuration directory (read-only)
+      - ./configs:/app/configs:ro
+      
+      # Mount logs directory (read-write for log output)
+      - ./logs:/app/logs
+      
+      # Optional: Mount source code for development hot-reload
+      # - ./cmd:/app/cmd:ro
+      # - ./internal:/app/internal:ro
+    
+    # Health check for API service
+    # Validates: Requirements 11.1, 11.2, 11.3, 11.4
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    # Resource limits (optional, uncomment for production)
+    # deploy:
+    #   resources:
+    #     limits:
+    #       cpus: '2'
+    #       memory: 1G
+    #     reservations:
+    #       cpus: '1'
+    #       memory: 512M
+
+# ----------------------------------------------------------------------------
+# Named Volumes
+# ----------------------------------------------------------------------------
+# Persistent storage for database and cache data
+# Data persists across container restarts and recreations
+volumes:
+  # MySQL data volume
+  mysql_data:
+    driver: local
+    # Optional: Use named volume with specific driver options
+    # driver_opts:
+    #   type: none
+    #   device: /path/to/mysql/data
+    #   o: bind
+  
+  # Redis data volume
+  redis_data:
+    driver: local
+
+# ----------------------------------------------------------------------------
+# Networks
+# ----------------------------------------------------------------------------
+# Custom bridge network for service communication
+# Provides DNS resolution between services (mysql, redis, api)
+networks:
+  fitness_network:
+    driver: bridge
+    # Optional: Configure network settings
+    # ipam:
+    #   config:
+    #     - subnet: 172.20.0.0/16
+
+# ============================================================================
+# Additional Notes
+# ============================================================================
+#
+# Development Setup:
+# 1. Copy .env.example to .env and update values
+# 2. Run: docker-compose up -d
+# 3. Check logs: docker-compose logs -f api
+# 4. Access API: http://localhost:8080
+# 5. Access MySQL: mysql -h 127.0.0.1 -P 3306 -u fitness_user -p
+# 6. Access Redis: redis-cli -h 127.0.0.1 -p 6379
+#
+# Production Considerations:
+# - Use docker-compose.prod.yml for production overrides
+# - Set strong passwords for MySQL and Redis
+# - Use secrets management (Docker Secrets or external vault)
+# - Configure resource limits for all services
+# - Use external volumes for data persistence
+# - Set up log aggregation (ELK, Splunk, etc.)
+# - Configure monitoring (Prometheus, Grafana)
+# - Use reverse proxy (Nginx, Traefik) for TLS termination
+# - Remove port mappings if using internal network only
+# - Enable Redis password authentication
+# - Configure MySQL for replication if needed
+#
+# Useful Commands:
+# - Start services: docker-compose up -d
+# - Stop services: docker-compose down
+# - View logs: docker-compose logs -f [service]
+# - Restart service: docker-compose restart [service]
+# - Execute command: docker-compose exec [service] [command]
+# - Scale API: docker-compose up -d --scale api=3
+# - Remove volumes: docker-compose down -v
+#
+# ============================================================================

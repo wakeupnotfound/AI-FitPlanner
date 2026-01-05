@@ -7,16 +7,16 @@ type AIAPIListResponse struct {
 }
 
 type AIAPIInfo struct {
-	ID           int64   `json:"id"`
-	Provider     string  `json:"provider"`
-	Name         string  `json:"name"`
-	APIEndpoint  string  `json:"api_endpoint"`
-	Model        string  `json:"model"`
-	MaxTokens    int     `json:"max_tokens,omitempty"`
-	Temperature  float64 `json:"temperature,omitempty"`
-	IsDefault    bool    `json:"is_default"`
-	Status       bool    `json:"status"`
-	CreatedAt    string  `json:"created_at"`
+	ID          int64   `json:"id"`
+	Provider    string  `json:"provider"`
+	Name        string  `json:"name"`
+	APIEndpoint string  `json:"api_endpoint"`
+	Model       string  `json:"model"`
+	MaxTokens   int     `json:"max_tokens,omitempty"`
+	Temperature float64 `json:"temperature,omitempty"`
+	IsDefault   bool    `json:"is_default"`
+	Status      bool    `json:"status"`
+	CreatedAt   string  `json:"created_at"`
 }
 
 type AIAPIDetailResponse struct {

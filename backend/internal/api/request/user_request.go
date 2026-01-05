@@ -15,8 +15,8 @@ type AddBodyDataRequest struct {
 
 // 添加健身目标请求
 type AddGoalRequest struct {
-	GoalType        string   `json:"goal_type" binding:"required"`
-	GoalDescription string   `json:"goal_description" binding:"required"`
+	GoalType        string   `json:"goal_type" binding:"required,min=1,max=100"`
+	GoalDescription string   `json:"goal_description" binding:"required,min=1,max=500"`
 	TargetWeight    *float64 `json:"target_weight" binding:"omitempty,min=20,max=500"`
 	Deadline        *string  `json:"deadline" binding:"omitempty,datetime=2006-01-02"`
 	Priority        *int     `json:"priority" binding:"omitempty,min=1,max=10"`
@@ -24,8 +24,8 @@ type AddGoalRequest struct {
 
 // 更新目标请求
 type UpdateGoalRequest struct {
-	GoalType        string   `json:"goal_type" binding:"omitempty"`
-	GoalDescription string   `json:"goal_description" binding:"omitempty"`
+	GoalType        string   `json:"goal_type" binding:"omitempty,min=1,max=100"`
+	GoalDescription string   `json:"goal_description" binding:"omitempty,min=1,max=500"`
 	TargetWeight    *float64 `json:"target_weight" binding:"omitempty,min=20,max=500"`
 	Deadline        *string  `json:"deadline" binding:"omitempty,datetime=2006-01-02"`
 	Priority        *int     `json:"priority" binding:"omitempty,min=1,max=10"`
