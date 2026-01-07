@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fix Verification</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .result { background: #f5f5f5; padding: 10px; margin: 10px 0; border-radius: 3px; white-space: pre-wrap; }
+        .error { background: #ffebee; color: #c62828; }
+        .success { background: #e8f5e9; color: #2e7d32; }
+        .warning { background: #fff3e0; color: #f57c00; }
+        button { padding: 8px 16px; margin: 5px; cursor: pointer; }
+        input { padding: 8px; margin: 5px; width: 200px; }
+        .step { margin: 10px 0; padding: 10px; border-left: 4px solid #2196f3; background: #f5f5f5; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Authentication Fix Verification</h1>
+        <p>This page will help you verify that the authentication routing issue has been fixed.</p>
+        
+        <div class="section">
+            <h3>Step 1: Clear All Storage</h3>
+            <p>First, let's clear any existing tokens to start fresh.</p>
+            <button onclick="clearAllStorage()">Clear All Storage</button>
+            <div id="clear-result" class="result"></div>
+        </div>
+
+        <div class="section">
+            <h3>Step 2: Test Unauthenticated State</h3>
+            <p>Verify that without tokens, the routing works correctly.</p>
+            <button onclick="testUnauthenticatedRouting()">Test Unauthenticated Routing</button>
+            <div id="unauth-result" class="result"></div>
+        </div>
+
+        <div class="section">
+            <h3>Step 3: Login and Get Tokens</h3>
+            <p>Login to get valid tokens and test authenticated routing.</p>
+            <input type="text" id="username" placeholder="Username" value="testuser">
+            <input type="password" id="password" placeholder="Password" value="Password123!">
+            <button onclick="loginAndTest()">Login and Test</button>
+            <div id="login-result" class="result"></div>
+        </div>
+
+        <div class="section">
+            <h3>Step 4: Test Authenticated State</h3>
+            <p>Verify that with valid tokens, the routing works correctly.</p>
+            <button onclick="testAuthenticatedRouting()">Test Authenticated Routing</button>
+            <div id="auth-result" class="result"></div>
+        </div>
+
+        <div class="section">
+            <h3>Step 5: Manual Navigation Test</h3>
+            <p>Try navigating to different pages manually:</p>
+            <div class="step">
+                <strong>Current URL:</strong> <span id="current-url"></span>
+            </div>
+            <button onclick="navigateTo('/')">Go to /</button>
+            <button onclick="navigateTo('/login')">Go to /login</button>
+            <button onclick="navigateTo('/dashboard')">Go to /dashboard</button>
+            <div id="nav-result" class="result"></div>
+        </div>
+
+        <div class="section">
+            <h3>Final Verification</h3>
+            <div id="final-result" class="result">
+                <strong>Instructions:</strong>
+                1. Complete steps 1-4 above
+                2. If all tests pass, try opening http://localhost:5173/ in a new tab
+                3. You should see either the login page (if not authenticated) or dashboard (if authenticated)
+                4. There should be no infinite redirects or page loops
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:9999/api/v1';
+
+        function log(elementId, message, type = 'success') {
+            const element = document.getElementById(elementId);
+            element.innerHTML = message;
+            element.className = `result ${type}`;
+        }
+
+        function updateCurrentUrl() {
+            document.getElementById('current-url').textContent = window.location.href;
+        }
+
+        function clearAllStorage() {
+            // Clear all possible token storage locations
+            localStorage.clear();
+            sessionStorage.clear();
+            
+            log('clear-result', '✅ All storage cleared successfully');
+        }
+
+        function testUnauthenticatedRouting() {
+            // Check that no tokens exist
+            const hasLocalToken = !!localStorage.getItem('access_token');
+            const hasSessionToken = !!sessionStorage.getItem('app_access_token');
+            
+            if (hasLocalToken || hasSessionToken) {
+                log('unauth-result', '❌ Tokens still exist! Please clear storage first.', 'error');
+                return;
+            }
+            
+            let result = '✅ No tokens found (correct for unauthenticated state)\n\n';
+            result += 'Expected routing behavior:\n';
+            result += '• / → should redirect to /login\n';
+            result += '• /login → should show login page\n';
+            result += '• /register → should show register page\n';
+            result += '• /dashboard → should redirect to /login\n';
+            
+            log('unauth-result', result);
+        }
+
+        async function loginAndTest() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            
+            if (!username || !password) {
+                log('login-result', '❌ Please enter username and password', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/auth/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username, password })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.data) {
+                    // Store tokens in sessionStorage (like secureStorage does)
+                    const { access_token, refresh_token, expires_in } = data.data;
+                    
+                    sessionStorage.setItem('app_access_token', access_token);
+                    sessionStorage.setItem('app_refresh_token', refresh_token);
+                    if (expires_in) {
+                        const expiryTime = Date.now() + (expires_in * 1000);
+                        sessionStorage.setItem('app_token_expiry', expiryTime.toString());
+                    }
+                    
+                    let result = '✅ Login successful!\n\n';
+                    result += 'Tokens stored:\n';
+                    result += `• Access Token: ${access_token.substring(0, 30)}...\n`;
+                    result += `• Refresh Token: ${refresh_token.substring(0, 30)}...\n`;
+                    result += `• Expires In: ${expires_in} seconds\n`;
+                    
+                    log('login-result', result);
+                } else {
+                    log('login-result', `❌ Login failed: ${JSON.stringify(data, null, 2)}`, 'error');
+                }
+            } catch (error) {
+                log('login-result', `❌ Login error: ${error.message}`, 'error');
+            }
+        }
+
+        function testAuthenticatedRouting() {
+            // Check that tokens exist
+            const hasSessionToken = !!sessionStorage.getItem('app_access_token');
+            
+            if (!hasSessionToken) {
+                log('auth-result', '❌ No tokens found! Please login first.', 'error');
+                return;
+            }
+            
+            let result = '✅ Tokens found (correct for authenticated state)\n\n';
+            result += 'Expected routing behavior:\n';
+            result += '• / → should redirect to /dashboard\n';
+            result += '• /login → should redirect to /dashboard\n';
+            result += '• /register → should redirect to /dashboard\n';
+            result += '• /dashboard → should show dashboard page\n';
+            
+            log('auth-result', result);
+        }
+
+        function navigateTo(path) {
+            const fullUrl = `http://localhost:5173${path}`;
+            log('nav-result', `Navigating to: ${fullUrl}`, 'warning');
+            
+            // Open in same tab after a short delay
+            setTimeout(() => {
+                window.location.href = fullUrl;
+            }, 1000);
+        }
+
+        // Auto-update URL display
+        setInterval(updateCurrentUrl, 1000);
+        
+        // Initialize on page load
+        window.onload = function() {
+            updateCurrentUrl();
+        };
+    </script>
+</body>
+</html>

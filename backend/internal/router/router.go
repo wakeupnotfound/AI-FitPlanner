@@ -123,6 +123,8 @@ func setupProtectedRoutes(rg *gin.RouterGroup, deps *Dependencies) {
 		user.POST("/body-data", userHandler.AddBodyData)
 		user.GET("/body-data", userHandler.GetBodyDataHistory)
 		user.POST("/fitness-goals", userHandler.SetFitnessGoals)
+		user.GET("/fitness-goals", userHandler.GetFitnessGoals)
+		user.PUT("/fitness-goals", userHandler.UpdateFitnessGoals)
 	}
 
 	// AI API management routes

@@ -43,6 +43,8 @@ type UserService interface {
 	AddBodyData(ctx context.Context, userID int64, req *BodyDataRequest) (*model.UserBodyData, error)
 	GetBodyDataHistory(ctx context.Context, userID int64) ([]*model.UserBodyData, error)
 	SetFitnessGoals(ctx context.Context, userID int64, req *FitnessGoalRequest) (*model.FitnessGoal, error)
+	GetFitnessGoals(ctx context.Context, userID int64) ([]*model.FitnessGoal, error)
+	UpdateFitnessGoals(ctx context.Context, userID int64, goalID int64, req *FitnessGoalRequest) (*model.FitnessGoal, error)
 }
 
 // userService implements the UserService interface
@@ -211,4 +213,72 @@ func (s *userService) SetFitnessGoals(ctx context.Context, userID int64, req *Fi
 	}
 
 	return goal, nil
+}
+
+
+// GetFitnessGoals retrieves all active fitness goals for a user
+// Validates: Requirements 2.5
+func (s *userService) GetFitnessGoals(ctx context.Context, userID int64) ([]*model.FitnessGoal, error) {
+	// Verify user exists
+	user, err := s.userRepo.GetByID(ctx, userID)
+	if err != nil {
+		return nil, errors.Wrap(err, errors.ErrDatabase, "failed to get user")
+	}
+	if user == nil {
+		return nil, errors.ErrResourceNotFound
+	}
+
+	// Get all fitness goals (empty status means all)
+	goals, err := s.fitnessGoalRepo.GetByUserID(ctx, userID, "")
+	if err != nil {
+		return nil, errors.Wrap(err, errors.ErrDatabase, "failed to get fitness goals")
+	}
+
+	return goals, nil
+}
+
+// UpdateFitnessGoals updates an existing fitness goal
+// Validates: Requirements 2.5
+func (s *userService) UpdateFitnessGoals(ctx context.Context, userID int64, goalID int64, req *FitnessGoalRequest) (*model.FitnessGoal, error) {
+	// Verify user exists
+	user, err := s.userRepo.GetByID(ctx, userID)
+	if err != nil {
+		return nil, errors.Wrap(err, errors.ErrDatabase, "failed to get user")
+	}
+	if user == nil {
+		return nil, errors.ErrResourceNotFound
+	}
+
+	// Get existing goals to find the one to update
+	goals, err := s.fitnessGoalRepo.GetByUserID(ctx, userID, "")
+	if err != nil {
+		return nil, errors.Wrap(err, errors.ErrDatabase, "failed to get fitness goals")
+	}
+
+	// Find the goal to update
+	var goalToUpdate *model.FitnessGoal
+	for _, g := range goals {
+		if g.ID == goalID {
+			goalToUpdate = g
+			break
+		}
+	}
+
+	if goalToUpdate == nil {
+		return nil, errors.ErrResourceNotFound
+	}
+
+	// Update fields
+	goalToUpdate.GoalType = req.GoalType
+	goalToUpdate.GoalDescription = req.GoalDescription
+	goalToUpdate.TargetWeight = req.TargetWeight
+	goalToUpdate.Deadline = req.Deadline
+	goalToUpdate.Priority = req.Priority
+	goalToUpdate.UpdatedAt = time.Now()
+
+	if err := s.fitnessGoalRepo.Update(ctx, goalToUpdate); err != nil {
+		return nil, errors.Wrap(err, errors.ErrDatabase, "failed to update fitness goal")
+	}
+
+	return goalToUpdate, nil
 }

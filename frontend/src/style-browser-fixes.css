@@ -1,0 +1,359 @@
+/**
+ * Browser-Specific CSS Fixes
+ * 
+ * This file contains CSS workarounds for browser-specific issues
+ * to ensure consistent behavior across Chrome, Safari, Firefox, and mobile browsers.
+ */
+
+/* ============================================
+   Safari-Specific Fixes
+   ============================================ */
+
+/* Fix for backdrop-filter in Safari */
+.blur-background {
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+
+/* Fix for flexbox gap in older Safari versions */
+.flex-gap-fallback {
+  display: flex;
+  gap: 1rem;
+}
+
+.flex-gap-fallback > * + * {
+  margin-left: 1rem; /* Fallback for Safari < 14.1 */
+}
+
+/* Fix for iOS Safari viewport height with address bar */
+:root {
+  --vh: 1vh; /* Will be set by JavaScript */
+}
+
+.full-height-mobile {
+  height: 100vh; /* Fallback */
+  height: calc(var(--vh, 1vh) * 100); /* Actual height */
+}
+
+/* Fix for iOS Safari safe area insets (notch support) */
+.safe-area-padding {
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+/* Fix for iOS Safari momentum scrolling */
+.smooth-scroll-ios {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Fix for iOS Safari input zoom prevention */
+input,
+select,
+textarea {
+  font-size: 16px; /* Prevents zoom on focus in iOS Safari */
+}
+
+/* Fix for iOS Safari button appearance */
+button,
+input[type="button"],
+input[type="submit"] {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+/* ============================================
+   Firefox-Specific Fixes
+   ============================================ */
+
+/* Fix for Firefox scrollbar styling */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #888 #f1f1f1;
+}
+
+/* Webkit browsers (Chrome, Safari, Edge) */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+/* Fix for Firefox input appearance */
+input[type="date"],
+input[type="time"],
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+/* Remove Firefox number input spinners */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+/* ============================================
+   Chrome/Edge-Specific Fixes
+   ============================================ */
+
+/* Fix for Chrome autofill background color */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px white inset !important;
+  -webkit-text-fill-color: #333 !important;
+  transition: background-color 5000s ease-in-out 0s;
+}
+
+/* Dark mode autofill fix */
+@media (prefers-color-scheme: dark) {
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus,
+  input:-webkit-autofill:active {
+    -webkit-box-shadow: 0 0 0 1000px #1a1a1a inset !important;
+    -webkit-text-fill-color: #fff !important;
+  }
+}
+
+/* Fix for Chrome search input cancel button */
+input[type="search"]::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+/* ============================================
+   Mobile-Specific Fixes
+   ============================================ */
+
+/* Fix for 300ms tap delay on mobile */
+a,
+button,
+input,
+select,
+textarea,
+label,
+[role="button"] {
+  touch-action: manipulation;
+}
+
+/* Fix for mobile tap highlight */
+* {
+  -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1);
+}
+
+/* Ensure minimum touch target size (44x44px for accessibility) */
+.touch-target {
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Fix for Android Chrome input zoom */
+@media screen and (max-width: 767px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important; /* Prevents zoom on focus */
+  }
+}
+
+/* Fix for mobile keyboard pushing content */
+.keyboard-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+/* ============================================
+   Cross-Browser Fixes
+   ============================================ */
+
+/* Fix for consistent box-sizing */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+/* Fix for consistent line-height */
+body {
+  line-height: 1.5;
+}
+
+/* Fix for consistent button styling */
+button {
+  font-family: inherit;
+  font-size: 100%;
+  line-height: 1.15;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+}
+
+/* Fix for consistent input styling */
+input,
+select,
+textarea {
+  font-family: inherit;
+  font-size: 100%;
+  line-height: 1.15;
+  margin: 0;
+}
+
+/* Fix for consistent image rendering */
+img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* Fix for consistent SVG rendering */
+svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+/* Fix for focus outline consistency */
+:focus-visible {
+  outline: 2px solid #1989fa;
+  outline-offset: 2px;
+}
+
+/* Remove outline for mouse users */
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* ============================================
+   Performance Optimizations
+   ============================================ */
+
+/* Enable GPU acceleration for animations */
+.gpu-accelerated {
+  transform: translateZ(0);
+  will-change: transform;
+}
+
+/* Optimize font rendering */
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* Optimize scrolling performance */
+.smooth-scroll {
+  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .smooth-scroll {
+    scroll-behavior: auto;
+  }
+}
+
+/* ============================================
+   Accessibility Fixes
+   ============================================ */
+
+/* Ensure sufficient color contrast */
+.text-contrast {
+  color: #333;
+  background-color: #fff;
+}
+
+@media (prefers-color-scheme: dark) {
+  .text-contrast {
+    color: #fff;
+    background-color: #1a1a1a;
+  }
+}
+
+/* Screen reader only content */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* Skip to main content link */
+.skip-link {
+  position: absolute;
+  top: -40px;
+  left: 0;
+  background: #1989fa;
+  color: white;
+  padding: 8px;
+  text-decoration: none;
+  z-index: 100;
+}
+
+.skip-link:focus {
+  top: 0;
+}
+
+/* ============================================
+   Print Styles
+   ============================================ */
+
+@media print {
+  /* Hide non-essential elements when printing */
+  .no-print,
+  nav,
+  .navigation,
+  button,
+  .button {
+    display: none !important;
+  }
+
+  /* Optimize for print */
+  body {
+    font-size: 12pt;
+    line-height: 1.5;
+    color: #000;
+    background: #fff;
+  }
+
+  /* Prevent page breaks inside elements */
+  h1, h2, h3, h4, h5, h6,
+  p, blockquote, pre,
+  ul, ol, dl {
+    page-break-inside: avoid;
+  }
+
+  /* Show URLs for links */
+  a[href]:after {
+    content: " (" attr(href) ")";
+  }
+}

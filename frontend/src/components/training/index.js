@@ -1,0 +1,6 @@
+export { default as AssessmentForm } from './AssessmentForm.vue'
+export { default as TrainingPlanCard } from './TrainingPlanCard.vue'
+export { default as WorkoutCard } from './WorkoutCard.vue'
+export { default as ExerciseItem } from './ExerciseItem.vue'
+export { default as WorkoutRecordForm } from './WorkoutRecordForm.vue'
+export { default as TrainingCalendar } from './TrainingCalendar.vue'

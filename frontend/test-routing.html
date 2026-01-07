@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Routing Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .result { background: #f5f5f5; padding: 10px; margin: 10px 0; border-radius: 3px; white-space: pre-wrap; }
+        .error { background: #ffebee; color: #c62828; }
+        .success { background: #e8f5e9; color: #2e7d32; }
+        button { padding: 8px 16px; margin: 5px; cursor: pointer; }
+        input { padding: 8px; margin: 5px; width: 200px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Routing Debug Test</h1>
+        
+        <div class="section">
+            <h3>1. Check Current Storage State</h3>
+            <button onclick="checkStorage()">Check Storage</button>
+            <div id="storage-result" class="result"></div>
+        </div>
+
+        <div class="section">
+            <h3>2. Simulate Authentication States</h3>
+            <button onclick="simulateLoggedIn()">Simulate Logged In</button>
+            <button onclick="simulateLoggedOut()">Simulate Logged Out</button>
+            <button onclick="clearAllStorage()">Clear All Storage</button>
+            <div id="auth-result" class="result"></div>
+        </div>
+
+        <div class="section">
+            <h3>3. Test Route Logic</h3>
+            <button onclick="testRouteLogic()">Test Route Logic</button>
+            <div id="route-result" class="result"></div>
+        </div>
+
+        <div class="section">
+            <h3>4. Navigation Test</h3>
+            <p>Current URL: <span id="current-url"></span></p>
+            <button onclick="navigateToRoot()">Navigate to /</button>
+            <button onclick="navigateToLogin()">Navigate to /login</button>
+            <button onclick="navigateToDashboard()">Navigate to /dashboard</button>
+            <div id="nav-result" class="result"></div>
+        </div>
+    </div>
+
+    <script>
+        function log(elementId, message, isError = false) {
+            const element = document.getElementById(elementId);
+            element.innerHTML = message;
+            element.className = `result ${isError ? 'error' : 'success'}`;
+        }
+
+        function updateCurrentUrl() {
+            document.getElementById('current-url').textContent = window.location.href;
+        }
+
+        function checkStorage() {
+            const storage = {
+                localStorage: {
+                    access_token: localStorage.getItem('access_token'),
+                    refresh_token: localStorage.getItem('refresh_token')
+                },
+                sessionStorage: {
+                    app_access_token: sessionStorage.getItem('app_access_token'),
+                    app_refresh_token: sessionStorage.getItem('app_refresh_token'),
+                    app_token_expiry: sessionStorage.getItem('app_token_expiry')
+                }
+            };
+            
+            log('storage-result', `Storage State:\n${JSON.stringify(storage, null, 2)}`);
+        }
+
+        function simulateLoggedIn() {
+            // Set tokens in sessionStorage (like secureStorage does)
+            const fakeToken = 'fake-access-token-' + Date.now();
+            const fakeRefresh = 'fake-refresh-token-' + Date.now();
+            const expiryTime = Date.now() + (3600 * 1000); // 1 hour from now
+            
+            sessionStorage.setItem('app_access_token', fakeToken);
+            sessionStorage.setItem('app_refresh_token', fakeRefresh);
+            sessionStorage.setItem('app_token_expiry', expiryTime.toString());
+            
+            log('auth-result', '✅ Simulated logged in state');
+            checkStorage();
+        }
+
+        function simulateLoggedOut() {
+            // Clear all tokens
+            localStorage.removeItem('access_token');
+            localStorage.removeItem('refresh_token');
+            sessionStorage.removeItem('app_access_token');
+            sessionStorage.removeItem('app_refresh_token');
+            sessionStorage.removeItem('app_token_expiry');
+            
+            log('auth-result', '✅ Simulated logged out state');
+            checkStorage();
+        }
+
+        function clearAllStorage() {
+            localStorage.clear();
+            sessionStorage.clear();
+            log('auth-result', '✅ All storage cleared');
+            checkStorage();
+        }
+
+        function testRouteLogic() {
+            // Simulate the route logic from router/index.js
+            
+            // Check sessionStorage token (like secureStorage does)
+            const token = sessionStorage.getItem('app_access_token');
+            const isAuthenticated = !!token;
+            
+            const routes = {
+                '/': isAuthenticated ? '/dashboard' : '/login',
+                '/login': isAuthenticated ? '/dashboard' : '/login',
+                '/register': isAuthenticated ? '/dashboard' : '/register',
+                '/dashboard': isAuthenticated ? '/dashboard' : '/login'
+            };
+            
+            let result = `Authentication Status: ${isAuthenticated ? 'Authenticated' : 'Not Authenticated'}\n`;
+            result += `Token: ${token ? token.substring(0, 20) + '...' : 'None'}\n\n`;
+            result += 'Route Logic:\n';
+            
+            Object.entries(routes).forEach(([path, redirect]) => {
+                result += `${path} → ${redirect}\n`;
+            });
+            
+            log('route-result', result);
+        }
+
+        function navigateToRoot() {
+            window.location.href = 'http://localhost:5173/';
+        }
+
+        function navigateToLogin() {
+            window.location.href = 'http://localhost:5173/login';
+        }
+
+        function navigateToDashboard() {
+            window.location.href = 'http://localhost:5173/dashboard';
+        }
+
+        // Auto-update URL display
+        setInterval(updateCurrentUrl, 1000);
+        
+        // Auto-check storage on page load
+        window.onload = function() {
+            updateCurrentUrl();
+            checkStorage();
+            testRouteLogic();
+        };
+    </script>
+</body>
+</html>

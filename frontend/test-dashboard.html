@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard API Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .result { background: #f5f5f5; padding: 10px; margin: 10px 0; border-radius: 3px; white-space: pre-wrap; }
+        .error { background: #ffebee; color: #c62828; }
+        .success { background: #e8f5e9; color: #2e7d32; }
+        button { padding: 8px 16px; margin: 5px; cursor: pointer; }
+        input { padding: 8px; margin: 5px; width: 200px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Dashboard API Test</h1>
+        
+        <div class="section">
+            <h3>1. Login First</h3>
+            <input type="text" id="username" placeholder="Username" value="testuser">
+            <input type="password" id="password" placeholder="Password" value="Password123!">
+            <button onclick="login()">Login</button>
+            <div id="login-result" class="result"></div>
+        </div>
+
+        <div class="section">
+            <h3>2. Test Dashboard APIs</h3>
+            <button onclick="testAllDashboardAPIs()">Test All Dashboard APIs</button>
+            <div id="dashboard-result" class="result"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:9999/api/v1';
+        let accessToken = null;
+
+        function log(elementId, message, isError = false) {
+            const element = document.getElementById(elementId);
+            element.innerHTML = message;
+            element.className = `result ${isError ? 'error' : 'success'}`;
+        }
+
+        async function login() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            
+            try {
+                const response = await fetch(`${API_BASE}/auth/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username, password })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.data) {
+                    accessToken = data.data.access_token;
+                    log('login-result', `✅ Login Success!\nToken: ${accessToken.substring(0, 50)}...`);
+                } else {
+                    log('login-result', `❌ Login Failed:\n${JSON.stringify(data, null, 2)}`, true);
+                }
+            } catch (error) {
+                log('login-result', `❌ Login Error: ${error.message}`, true);
+            }
+        }
+
+        async function makeAuthenticatedRequest(endpoint, params = {}) {
+            if (!accessToken) {
+                return { error: 'No access token available. Please login first.' };
+            }
+
+            try {
+                const url = new URL(`${API_BASE}${endpoint}`);
+                Object.keys(params).forEach(key => url.searchParams.append(key, params[key]));
+                
+                const response = await fetch(url, {
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                return { response, data, status: response.status };
+            } catch (error) {
+                return { error: error.message };
+            }
+        }
+
+        async function testAllDashboardAPIs() {
+            if (!accessToken) {
+                log('dashboard-result', '❌ Please login first!', true);
+                return;
+            }
+
+            let results = [];
+
+            // Test User Profile
+            const profileResult = await makeAuthenticatedRequest('/user/profile');
+            if (profileResult.error) {
+                results.push(`❌ User Profile: ${profileResult.error}`);
+            } else {
+                results.push(`✅ User Profile: ${profileResult.status} - ${JSON.stringify(profileResult.data.data, null, 2)}`);
+            }
+
+            // Test Today's Workout
+            const workoutResult = await makeAuthenticatedRequest('/training-plans/today');
+            if (workoutResult.error) {
+                results.push(`❌ Today Workout: ${workoutResult.error}`);
+            } else {
+                results.push(`✅ Today Workout: ${workoutResult.status} - ${JSON.stringify(workoutResult.data.data, null, 2)}`);
+            }
+
+            // Test Today's Meals
+            const mealsResult = await makeAuthenticatedRequest('/nutrition-plans/today');
+            if (mealsResult.error) {
+                results.push(`❌ Today Meals: ${mealsResult.error}`);
+            } else {
+                results.push(`✅ Today Meals: ${mealsResult.status} - ${JSON.stringify(mealsResult.data.data, null, 2)}`);
+            }
+
+            // Test Training Statistics
+            const statsResult = await makeAuthenticatedRequest('/stats/training', { period: 'week' });
+            if (statsResult.error) {
+                results.push(`❌ Training Stats: ${statsResult.error}`);
+            } else {
+                results.push(`✅ Training Stats: ${statsResult.status} - ${JSON.stringify(statsResult.data.data, null, 2)}`);
+            }
+
+            // Test User Goals
+            const goalsResult = await makeAuthenticatedRequest('/user/fitness-goals');
+            if (goalsResult.error) {
+                results.push(`❌ User Goals: ${goalsResult.error}`);
+            } else {
+                results.push(`✅ User Goals: ${goalsResult.status} - ${JSON.stringify(goalsResult.data, null, 2)}`);
+            }
+
+            log('dashboard-result', results.join('\n\n'));
+        }
+    </script>
+</body>
+</html>

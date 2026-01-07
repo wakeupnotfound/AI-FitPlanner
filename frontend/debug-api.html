@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Debug Tool</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .result { background: #f5f5f5; padding: 10px; margin: 10px 0; border-radius: 3px; }
+        .error { background: #ffebee; color: #c62828; }
+        .success { background: #e8f5e9; color: #2e7d32; }
+        button { padding: 8px 16px; margin: 5px; cursor: pointer; }
+        input { padding: 8px; margin: 5px; width: 200px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>API Debug Tool</h1>
+        
+        <div class="section">
+            <h3>1. Test Backend Health</h3>
+            <button onclick="testHealth()">Test Health Endpoint</button>
+            <div id="health-result" class="result"></div>
+        </div>
+
+        <div class="section">
+            <h3>2. Test Authentication</h3>
+            <input type="text" id="username" placeholder="Username" value="test@example.com">
+            <input type="password" id="password" placeholder="Password" value="password123">
+            <button onclick="testLogin()">Test Login</button>
+            <div id="auth-result" class="result"></div>
+        </div>
+
+        <div class="section">
+            <h3>3. Test Protected Endpoints</h3>
+            <button onclick="testUserProfile()">Test User Profile</button>
+            <button onclick="testTodayWorkout()">Test Today Workout</button>
+            <button onclick="testTodayMeals()">Test Today Meals</button>
+            <button onclick="testStatistics()">Test Statistics</button>
+            <div id="protected-result" class="result"></div>
+        </div>
+
+        <div class="section">
+            <h3>4. Current Token Info</h3>
+            <button onclick="showTokenInfo()">Show Token Info</button>
+            <div id="token-result" class="result"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:9999/api/v1';
+        let accessToken = localStorage.getItem('access_token') || sessionStorage.getItem('app_access_token');
+
+        function log(elementId, message, isError = false) {
+            const element = document.getElementById(elementId);
+            element.innerHTML = message;
+            element.className = `result ${isError ? 'error' : 'success'}`;
+        }
+
+        async function testHealth() {
+            try {
+                const response = await fetch('http://localhost:9999/health');
+                const data = await response.json();
+                log('health-result', `✅ Health Check: ${JSON.stringify(data, null, 2)}`);
+            } catch (error) {
+                log('health-result', `❌ Health Check Failed: ${error.message}`, true);
+            }
+        }
+
+        async function testLogin() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            
+            try {
+                const response = await fetch(`${API_BASE}/auth/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username, password })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.data) {
+                    accessToken = data.data.access_token;
+                    localStorage.setItem('access_token', accessToken);
+                    log('auth-result', `✅ Login Success: Token received`);
+                } else {
+                    log('auth-result', `❌ Login Failed: ${JSON.stringify(data, null, 2)}`, true);
+                }
+            } catch (error) {
+                log('auth-result', `❌ Login Error: ${error.message}`, true);
+            }
+        }
+
+        async function makeAuthenticatedRequest(endpoint) {
+            if (!accessToken) {
+                return { error: 'No access token available. Please login first.' };
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}${endpoint}`, {
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                return { response, data };
+            } catch (error) {
+                return { error: error.message };
+            }
+        }
+
+        async function testUserProfile() {
+            const result = await makeAuthenticatedRequest('/user/profile');
+            if (result.error) {
+                log('protected-result', `❌ User Profile: ${result.error}`, true);
+            } else {
+                log('protected-result', `✅ User Profile: ${JSON.stringify(result.data, null, 2)}`);
+            }
+        }
+
+        async function testTodayWorkout() {
+            const result = await makeAuthenticatedRequest('/training-plans/today');
+            if (result.error) {
+                log('protected-result', `❌ Today Workout: ${result.error}`, true);
+            } else {
+                log('protected-result', `✅ Today Workout: ${JSON.stringify(result.data, null, 2)}`);
+            }
+        }
+
+        async function testTodayMeals() {
+            const result = await makeAuthenticatedRequest('/nutrition-plans/today');
+            if (result.error) {
+                log('protected-result', `❌ Today Meals: ${result.error}`, true);
+            } else {
+                log('protected-result', `✅ Today Meals: ${JSON.stringify(result.data, null, 2)}`);
+            }
+        }
+
+        async function testStatistics() {
+            const result = await makeAuthenticatedRequest('/stats/training');
+            if (result.error) {
+                log('protected-result', `❌ Statistics: ${result.error}`, true);
+            } else {
+                log('protected-result', `✅ Statistics: ${JSON.stringify(result.data, null, 2)}`);
+            }
+        }
+
+        function showTokenInfo() {
+            const tokens = {
+                localStorage_access_token: localStorage.getItem('access_token'),
+                sessionStorage_access_token: sessionStorage.getItem('app_access_token'),
+                current_token: accessToken
+            };
+            log('token-result', `Token Info: ${JSON.stringify(tokens, null, 2)}`);
+        }
+
+        // Auto-load token on page load
+        window.onload = function() {
+            showTokenInfo();
+        };
+    </script>
+</body>
+</html>

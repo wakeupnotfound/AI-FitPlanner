@@ -265,3 +265,176 @@ func (h *UserHandler) SetFitnessGoals(c *gin.Context) {
 
 	h.Created(c, resp)
 }
+
+
+// GetFitnessGoals handles GET /api/v1/user/fitness-goals
+// Requirements: 2.5
+// @Summary Get fitness goals
+// @Description Get the authenticated user's fitness goals
+// @Tags User
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} response.BaseResponse "Fitness goals retrieved successfully"
+// @Failure 401 {object} response.BaseResponse "Unauthorized"
+// @Failure 500 {object} response.BaseResponse "Internal server error"
+// @Router /user/fitness-goals [get]
+func (h *UserHandler) GetFitnessGoals(c *gin.Context) {
+	userID, ok := h.GetUserID(c)
+	if !ok {
+		return
+	}
+
+	goals, err := h.userService.GetFitnessGoals(c.Request.Context(), userID)
+	if err != nil {
+		h.Error(c, err)
+		return
+	}
+
+	// Convert to response format
+	goalInfos := make([]response.GoalInfo, 0, len(goals))
+	for _, goal := range goals {
+		info := response.GoalInfo{
+			ID:        goal.ID,
+			GoalType:  goal.GoalType,
+			Priority:  goal.Priority,
+			Status:    goal.Status,
+			CreatedAt: goal.CreatedAt.Format(time.RFC3339),
+		}
+		if goal.GoalDescription != nil {
+			info.GoalDescription = *goal.GoalDescription
+		}
+		if goal.TargetWeight != nil {
+			info.TargetWeight = *goal.TargetWeight
+		}
+		if goal.Deadline != nil {
+			info.Deadline = goal.Deadline.Format("2006-01-02")
+		}
+		goalInfos = append(goalInfos, info)
+	}
+
+	h.Success(c, map[string]interface{}{
+		"goals": goalInfos,
+	})
+}
+
+// UpdateFitnessGoals handles PUT /api/v1/user/fitness-goals
+// Requirements: 2.5
+// @Summary Update fitness goals
+// @Description Update the authenticated user's fitness goals
+// @Tags User
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param request body request.AddGoalRequest true "Goal data"
+// @Success 200 {object} response.BaseResponse "Fitness goals updated successfully"
+// @Failure 400 {object} response.BaseResponse "Bad request"
+// @Failure 401 {object} response.BaseResponse "Unauthorized"
+// @Failure 404 {object} response.BaseResponse "Goal not found"
+// @Failure 500 {object} response.BaseResponse "Internal server error"
+// @Router /user/fitness-goals [put]
+func (h *UserHandler) UpdateFitnessGoals(c *gin.Context) {
+	userID, ok := h.GetUserID(c)
+	if !ok {
+		return
+	}
+
+	var req request.AddGoalRequest
+	if !h.BindJSON(c, &req) {
+		return
+	}
+
+	// Get existing goals first
+	goals, err := h.userService.GetFitnessGoals(c.Request.Context(), userID)
+	if err != nil {
+		h.Error(c, err)
+		return
+	}
+
+	// If no goals exist, create a new one
+	if len(goals) == 0 {
+		serviceReq := &service.FitnessGoalRequest{
+			GoalType:        req.GoalType,
+			GoalDescription: &req.GoalDescription,
+			TargetWeight:    req.TargetWeight,
+			Priority:        1,
+		}
+		if req.Priority != nil {
+			serviceReq.Priority = *req.Priority
+		}
+		if req.Deadline != nil {
+			deadline, err := time.Parse("2006-01-02", *req.Deadline)
+			if err == nil {
+				serviceReq.Deadline = &deadline
+			}
+		}
+
+		goal, err := h.userService.SetFitnessGoals(c.Request.Context(), userID, serviceReq)
+		if err != nil {
+			h.Error(c, err)
+			return
+		}
+
+		resp := response.GoalInfo{
+			ID:        goal.ID,
+			GoalType:  goal.GoalType,
+			Priority:  goal.Priority,
+			Status:    goal.Status,
+			CreatedAt: goal.CreatedAt.Format(time.RFC3339),
+		}
+		if goal.GoalDescription != nil {
+			resp.GoalDescription = *goal.GoalDescription
+		}
+		if goal.TargetWeight != nil {
+			resp.TargetWeight = *goal.TargetWeight
+		}
+		if goal.Deadline != nil {
+			resp.Deadline = goal.Deadline.Format("2006-01-02")
+		}
+
+		h.Success(c, resp)
+		return
+	}
+
+	// Update the first (most recent) goal
+	goalToUpdate := goals[0]
+	serviceReq := &service.FitnessGoalRequest{
+		GoalType:        req.GoalType,
+		GoalDescription: &req.GoalDescription,
+		TargetWeight:    req.TargetWeight,
+		Priority:        1,
+	}
+	if req.Priority != nil {
+		serviceReq.Priority = *req.Priority
+	}
+	if req.Deadline != nil {
+		deadline, err := time.Parse("2006-01-02", *req.Deadline)
+		if err == nil {
+			serviceReq.Deadline = &deadline
+		}
+	}
+
+	goal, err := h.userService.UpdateFitnessGoals(c.Request.Context(), userID, goalToUpdate.ID, serviceReq)
+	if err != nil {
+		h.Error(c, err)
+		return
+	}
+
+	resp := response.GoalInfo{
+		ID:        goal.ID,
+		GoalType:  goal.GoalType,
+		Priority:  goal.Priority,
+		Status:    goal.Status,
+		CreatedAt: goal.CreatedAt.Format(time.RFC3339),
+	}
+	if goal.GoalDescription != nil {
+		resp.GoalDescription = *goal.GoalDescription
+	}
+	if goal.TargetWeight != nil {
+		resp.TargetWeight = *goal.TargetWeight
+	}
+	if goal.Deadline != nil {
+		resp.Deadline = goal.Deadline.Format("2006-01-02")
+	}
+
+	h.Success(c, resp)
+}
