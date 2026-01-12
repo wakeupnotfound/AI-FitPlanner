@@ -38,7 +38,8 @@ export const useTrainingStore = defineStore('training', {
      * Get training history sorted by date (newest first)
      */
     trainingHistory: (state) => {
-      return [...state.history].sort((a, b) => 
+      const history = Array.isArray(state.history) ? state.history : []
+      return [...history].sort((a, b) => 
         new Date(b.workout_date) - new Date(a.workout_date)
       )
     },
@@ -75,11 +76,6 @@ export const useTrainingStore = defineStore('training', {
 
       try {
         const response = await apiClient.post('/training-plans/generate', assessmentData)
-        const newPlan = response.data
-        
-        this.plans.push(newPlan)
-        this.currentPlan = newPlan
-        
         return response
       } catch (error) {
         this.error = error
@@ -98,7 +94,8 @@ export const useTrainingStore = defineStore('training', {
 
       try {
         const response = await apiClient.get('/training-plans')
-        this.plans = response.data || []
+        const plans = response.data?.plans
+        this.plans = Array.isArray(plans) ? plans : []
         
         // Set current plan to active plan if exists
         const activePlan = this.plans.find(plan => plan.status === 'active')
@@ -125,13 +122,16 @@ export const useTrainingStore = defineStore('training', {
 
       try {
         const response = await apiClient.get(`/training-plans/${planId}`)
+        const plan = response.data?.plan || response.data
         
         // Update plan in local state
-        const planIndex = this.plans.findIndex(p => p.id === planId)
-        if (planIndex !== -1) {
-          this.plans[planIndex] = response.data
-        } else {
-          this.plans.push(response.data)
+        if (plan) {
+          const planIndex = this.plans.findIndex(p => p.id === planId)
+          if (planIndex !== -1) {
+            this.plans[planIndex] = plan
+          } else {
+            this.plans.push(plan)
+          }
         }
         
         return response
@@ -152,7 +152,7 @@ export const useTrainingStore = defineStore('training', {
 
       try {
         const response = await apiClient.get('/training-plans/today')
-        this.todayWorkout = response.data
+        this.todayWorkout = response.data?.schedule || null
         return response
       } catch (error) {
         this.error = error
@@ -176,10 +176,14 @@ export const useTrainingStore = defineStore('training', {
 
       try {
         const response = await apiClient.post('/training-records', workoutData)
-        
-        // Add to history
-        this.history.unshift(response.data)
-        
+        const record = response.data?.record
+        if (record) {
+          const existingIndex = this.history.findIndex(item => item.id === record.id)
+          if (existingIndex !== -1) {
+            this.history.splice(existingIndex, 1)
+          }
+          this.history.unshift(record)
+        }
         return response
       } catch (error) {
         this.error = error
@@ -201,7 +205,8 @@ export const useTrainingStore = defineStore('training', {
 
       try {
         const response = await apiClient.get('/training-records', { params })
-        this.history = response.data || []
+        const records = response.data?.records
+        this.history = Array.isArray(records) ? records : []
         return response
       } catch (error) {
         this.error = error

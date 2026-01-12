@@ -8,10 +8,10 @@ export const trainingService = {
   /**
    * Generate a new training plan using AI
    * @param {Object} planData - Plan generation parameters
-   * @param {string} planData.name - Plan name
+   * @param {string} planData.plan_name - Plan name
    * @param {number} planData.duration_weeks - Duration in weeks
    * @param {string} planData.goal - Goal type (muscle_gain, fat_loss, endurance)
-   * @param {string} planData.difficulty - Difficulty level (easy, medium, hard, extreme)
+   * @param {string} planData.difficulty_level - Difficulty level (easy, medium, hard, extreme)
    * @param {number} [planData.ai_api_id] - AI API configuration ID
    * @returns {Promise<Object>} Response with task_id for async generation
    */

@@ -8,15 +8,27 @@ export const nutritionService = {
   /**
    * Generate a new nutrition plan using AI
    * @param {Object} planData - Plan generation parameters
-   * @param {string} planData.name - Plan name
+   * @param {string} planData.plan_name - Plan name
+   * @param {number} planData.duration_days - Duration in days
    * @param {number} planData.daily_calories - Target daily calories
-   * @param {Object} planData.macro_ratios - Macro nutrient ratios (protein, carbs, fat)
+   * @param {number} planData.protein_ratio - Protein ratio (0-1)
+   * @param {number} planData.carb_ratio - Carb ratio (0-1)
+   * @param {number} planData.fat_ratio - Fat ratio (0-1)
    * @param {Array} planData.dietary_restrictions - Dietary restrictions
    * @param {number} [planData.ai_api_id] - AI API configuration ID
-   * @returns {Promise<Object>} Response with generated plan
+   * @returns {Promise<Object>} Response with task_id for async generation
    */
   async generatePlan(planData) {
     return apiClient.post('/nutrition-plans/generate', planData)
+  },
+
+  /**
+   * Check nutrition plan generation task status
+   * @param {string} taskId - Task ID from generatePlan
+   * @returns {Promise<Object>} Response with task status and progress
+   */
+  async checkTaskStatus(taskId) {
+    return apiClient.get(`/nutrition-plans/tasks/${taskId}`)
   },
 
   /**

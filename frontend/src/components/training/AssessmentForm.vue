@@ -395,6 +395,7 @@ const handleSubmit = () => {
     weekly_available_days: parseInt(formData.weekly_available_days),
     daily_available_minutes: parseInt(formData.daily_available_minutes),
     activity_type: formData.activity_type,
+    assessment_date: new Date().toISOString().slice(0, 10),
     injury_history: injuryText || null,
     health_conditions: sanitizeInput(formData.health_conditions) || null,
     preferred_days: formData.preferred_days.length > 0 ? formData.preferred_days : null,

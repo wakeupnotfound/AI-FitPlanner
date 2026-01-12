@@ -31,6 +31,9 @@ type FitnessGoal struct {
 	UserID          int64      `gorm:"not null;index:user_status" json:"user_id" validate:"required"`
 	GoalType        string     `gorm:"size:100;not null" json:"goal_type" validate:"required,max=100"`
 	GoalDescription *string    `gorm:"type:text" json:"goal_description"`
+	InitialWeight   *float64   `gorm:"type:decimal(5,2)" json:"initial_weight" validate:"omitempty,min=20,max=500"`
+	InitialBodyFat  *float64   `gorm:"type:decimal(4,2)" json:"initial_body_fat" validate:"omitempty,min=0,max=100"`
+	InitialMuscle   *float64   `gorm:"type:decimal(4,2)" json:"initial_muscle_mass" validate:"omitempty,min=0,max=100"`
 	TargetWeight    *float64   `gorm:"type:decimal(5,2)" json:"target_weight" validate:"omitempty,min=20,max=500"`
 	Deadline        *time.Time `gorm:"type:date" json:"deadline"`
 	Priority        int        `gorm:"default:1" json:"priority" validate:"min=1,max=10"`

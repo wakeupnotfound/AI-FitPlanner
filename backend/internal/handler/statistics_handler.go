@@ -1,8 +1,11 @@
 package handler
 
 import (
+	"time"
+
 	"github.com/ai-fitness-planner/backend/internal/api/request"
 	"github.com/ai-fitness-planner/backend/internal/api/response"
+	"github.com/ai-fitness-planner/backend/internal/errors"
 	"github.com/ai-fitness-planner/backend/internal/service"
 	"github.com/gin-gonic/gin"
 )
@@ -35,7 +38,7 @@ func (h *StatisticsHandler) GetTrainingStatistics(c *gin.Context) {
 		return
 	}
 
-	stats, err := h.statsService.GetTrainingStatistics(c.Request.Context(), userID, params.Period)
+	stats, err := h.getTrainingStats(c, userID, params)
 	if err != nil {
 		h.Error(c, err)
 		return
@@ -129,13 +132,7 @@ func (h *StatisticsHandler) GetTrends(c *gin.Context) {
 		return
 	}
 
-	// Default count to 12 if not provided
-	count := params.Count
-	if count == 0 {
-		count = 12
-	}
-
-	trends, err := h.statsService.CalculateTrends(c.Request.Context(), userID, params.Period, count)
+	trends, err := h.getTrends(c, userID, params)
 	if err != nil {
 		h.Error(c, err)
 		return
@@ -163,4 +160,64 @@ func (h *StatisticsHandler) GetTrends(c *gin.Context) {
 	}
 
 	h.Success(c, resp)
+}
+
+func (h *StatisticsHandler) getTrainingStats(c *gin.Context, userID int64, params request.TrainingStatsParams) (*service.TrainingStats, error) {
+	startProvided := params.StartDate != "" || params.EndDate != ""
+	if startProvided {
+		if params.StartDate == "" || params.EndDate == "" {
+			return nil, errors.New(errors.ErrInvalidParam, "start_date和end_date必须同时提供")
+		}
+		startDate, err := time.ParseInLocation("2006-01-02", params.StartDate, time.Local)
+		if err != nil {
+			return nil, errors.New(errors.ErrInvalidParam, "start_date格式无效")
+		}
+		endDate, err := time.ParseInLocation("2006-01-02", params.EndDate, time.Local)
+		if err != nil {
+			return nil, errors.New(errors.ErrInvalidParam, "end_date格式无效")
+		}
+		if endDate.Before(startDate) {
+			return nil, errors.New(errors.ErrInvalidParam, "end_date必须大于start_date")
+		}
+		return h.statsService.GetTrainingStatisticsByRange(c.Request.Context(), userID, startDate, endDate)
+	}
+
+	period := params.Period
+	if period == "" {
+		period = "week"
+	}
+	return h.statsService.GetTrainingStatistics(c.Request.Context(), userID, period)
+}
+
+func (h *StatisticsHandler) getTrends(c *gin.Context, userID int64, params request.TrendsParams) (*service.TrendsReport, error) {
+	period := params.Period
+	if period == "" {
+		period = "week"
+	}
+
+	startProvided := params.StartDate != "" || params.EndDate != ""
+	if startProvided {
+		if params.StartDate == "" || params.EndDate == "" {
+			return nil, errors.New(errors.ErrInvalidParam, "start_date和end_date必须同时提供")
+		}
+		startDate, err := time.ParseInLocation("2006-01-02", params.StartDate, time.Local)
+		if err != nil {
+			return nil, errors.New(errors.ErrInvalidParam, "start_date格式无效")
+		}
+		endDate, err := time.ParseInLocation("2006-01-02", params.EndDate, time.Local)
+		if err != nil {
+			return nil, errors.New(errors.ErrInvalidParam, "end_date格式无效")
+		}
+		if endDate.Before(startDate) {
+			return nil, errors.New(errors.ErrInvalidParam, "end_date必须大于start_date")
+		}
+		return h.statsService.CalculateTrendsByRange(c.Request.Context(), userID, period, startDate, endDate)
+	}
+
+	count := params.Count
+	if count == 0 {
+		count = 12
+	}
+
+	return h.statsService.CalculateTrends(c.Request.Context(), userID, period, count)
 }

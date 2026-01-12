@@ -34,8 +34,9 @@ export const useUserStore = defineStore('user', {
      * Get body data history sorted by date (newest first)
      */
     bodyDataHistory: (state) => {
-      return [...state.bodyData].sort((a, b) => 
-        new Date(b.record_date) - new Date(a.record_date)
+      const items = Array.isArray(state.bodyData) ? state.bodyData : []
+      return [...items].sort((a, b) => 
+        new Date(b.measurement_date) - new Date(a.measurement_date)
       )
     },
 
@@ -55,7 +56,7 @@ export const useUserStore = defineStore('user', {
 
       try {
         const response = await apiClient.get('/user/profile')
-        this.profile = response.data
+        this.profile = response.data?.user || null
         return response
       } catch (error) {
         this.error = error
@@ -75,7 +76,8 @@ export const useUserStore = defineStore('user', {
 
       try {
         const response = await apiClient.put('/user/profile', profileData)
-        this.profile = response.data
+        this.profile = response.data || null
+        await this.fetchProfile()
         return response
       } catch (error) {
         this.error = error
@@ -102,6 +104,9 @@ export const useUserStore = defineStore('user', {
         const response = await apiClient.post('/user/body-data', bodyDataEntry)
         
         // Add new body data to the beginning of the array
+        if (!Array.isArray(this.bodyData)) {
+          this.bodyData = []
+        }
         this.bodyData.unshift(response.data)
         
         return response
@@ -122,7 +127,8 @@ export const useUserStore = defineStore('user', {
 
       try {
         const response = await apiClient.get('/user/body-data')
-        this.bodyData = response.data || []
+        const items = response.data?.body_data
+        this.bodyData = Array.isArray(items) ? items : []
         return response
       } catch (error) {
         this.error = error
@@ -142,7 +148,7 @@ export const useUserStore = defineStore('user', {
 
       try {
         const response = await apiClient.post('/user/fitness-goals', goalsData)
-        this.goals = response.data
+        this.goals = response.data || null
         return response
       } catch (error) {
         this.error = error
@@ -161,7 +167,8 @@ export const useUserStore = defineStore('user', {
 
       try {
         const response = await apiClient.get('/user/fitness-goals')
-        this.goals = response.data
+        const goals = response.data?.goals
+        this.goals = Array.isArray(goals) ? (goals[0] || null) : null
         return response
       } catch (error) {
         this.error = error

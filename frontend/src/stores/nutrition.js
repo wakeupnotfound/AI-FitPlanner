@@ -26,7 +26,8 @@ export const useNutritionStore = defineStore('nutrition', {
      * Get active nutrition plan
      */
     activePlan: (state) => {
-      return state.currentPlan || state.plans.find(plan => plan.status === 'active')
+      const plans = Array.isArray(state.plans) ? state.plans : []
+      return state.currentPlan || plans.find(plan => plan.status === 'active')
     },
 
     /**
@@ -38,7 +39,8 @@ export const useNutritionStore = defineStore('nutrition', {
      * Get meal history sorted by date (newest first)
      */
     mealHistory: (state) => {
-      return [...state.history].sort((a, b) => 
+      const history = Array.isArray(state.history) ? state.history : []
+      return [...history].sort((a, b) => 
         new Date(b.meal_date) - new Date(a.meal_date)
       )
     },
@@ -49,7 +51,8 @@ export const useNutritionStore = defineStore('nutrition', {
     mealHistoryGroupedByDate: (state) => {
       const grouped = {}
       
-      state.history.forEach(meal => {
+      const history = Array.isArray(state.history) ? state.history : []
+      history.forEach(meal => {
         const date = meal.meal_date.split('T')[0] // Get date part only
         if (!grouped[date]) {
           grouped[date] = []
@@ -72,8 +75,9 @@ export const useNutritionStore = defineStore('nutrition', {
       if (!state.todayMeals || !state.todayMeals.meals) {
         return 0
       }
-      return state.todayMeals.meals.reduce((total, meal) => {
-        return total + (meal.total_calories || 0)
+      const meals = Object.values(state.todayMeals.meals || {})
+      return meals.reduce((total, meal) => {
+        return total + (meal?.total_calories || 0)
       }, 0)
     },
 
@@ -102,11 +106,6 @@ export const useNutritionStore = defineStore('nutrition', {
 
       try {
         const response = await apiClient.post('/nutrition-plans/generate', planData)
-        const newPlan = response.data
-        
-        this.plans.push(newPlan)
-        this.currentPlan = newPlan
-        
         return response
       } catch (error) {
         this.error = error
@@ -125,7 +124,8 @@ export const useNutritionStore = defineStore('nutrition', {
 
       try {
         const response = await apiClient.get('/nutrition-plans')
-        this.plans = response.data || []
+        const plans = response.data?.plans
+        this.plans = Array.isArray(plans) ? plans : []
         
         // Set current plan to active plan if exists
         const activePlan = this.plans.find(plan => plan.status === 'active')
@@ -152,13 +152,16 @@ export const useNutritionStore = defineStore('nutrition', {
 
       try {
         const response = await apiClient.get(`/nutrition-plans/${planId}`)
+        const plan = response.data?.plan || response.data
         
         // Update plan in local state
-        const planIndex = this.plans.findIndex(p => p.id === planId)
-        if (planIndex !== -1) {
-          this.plans[planIndex] = response.data
-        } else {
-          this.plans.push(response.data)
+        if (plan) {
+          const planIndex = this.plans.findIndex(p => p.id === planId)
+          if (planIndex !== -1) {
+            this.plans[planIndex] = plan
+          } else {
+            this.plans.push(plan)
+          }
         }
         
         return response
@@ -179,7 +182,7 @@ export const useNutritionStore = defineStore('nutrition', {
 
       try {
         const response = await apiClient.get('/nutrition-plans/today')
-        this.todayMeals = response.data
+        this.todayMeals = response.data || null
         return response
       } catch (error) {
         this.error = error
@@ -203,10 +206,6 @@ export const useNutritionStore = defineStore('nutrition', {
 
       try {
         const response = await apiClient.post('/nutrition-records', mealData)
-        
-        // Add to history
-        this.history.unshift(response.data)
-        
         return response
       } catch (error) {
         this.error = error
@@ -228,7 +227,8 @@ export const useNutritionStore = defineStore('nutrition', {
 
       try {
         const response = await apiClient.get('/nutrition-records', { params })
-        this.history = response.data || []
+        const records = response.data?.records
+        this.history = Array.isArray(records) ? records : []
         return response
       } catch (error) {
         this.error = error

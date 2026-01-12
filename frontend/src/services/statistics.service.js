@@ -33,7 +33,7 @@ export const statisticsService = {
    * @param {Object} goalData - Goal data
    * @returns {Object} Progress calculation result
    */
-  calculateProgress(currentData, goalData) {
+  calculateProgress(currentData, goalData, history = []) {
     if (!currentData || !goalData) {
       return {
         percentage: 0,
@@ -41,12 +41,36 @@ export const statisticsService = {
       }
     }
 
+    const historyItems = Array.isArray(history) ? history : []
+    const goalCreatedAt = goalData.created_at ? new Date(goalData.created_at) : null
+
+    const getInitialValue = (key, fallback) => {
+      if (!historyItems.length) return fallback
+      const filtered = goalCreatedAt
+        ? historyItems.filter((item) => {
+            if (!item.measurement_date) return false
+            const itemDate = new Date(item.measurement_date)
+            return itemDate <= goalCreatedAt
+          })
+        : historyItems
+      const sorted = filtered
+        .slice()
+        .sort((a, b) => new Date(a.measurement_date) - new Date(b.measurement_date))
+      for (const item of sorted) {
+        const value = item[key]
+        if (value !== null && value !== undefined && value !== '') {
+          return Number(value)
+        }
+      }
+      return fallback
+    }
+
     const comparison = {}
     const percentages = []
 
     // Calculate weight progress
     if (goalData.target_weight && currentData.weight) {
-      const initial = goalData.initial_weight || currentData.weight
+      const initial = goalData.initial_weight || getInitialValue('weight', currentData.weight)
       const target = goalData.target_weight
       const current = currentData.weight
       
@@ -66,10 +90,11 @@ export const statisticsService = {
     }
 
     // Calculate body fat progress
-    if (goalData.target_body_fat && currentData.body_fat) {
-      const initial = goalData.initial_body_fat || currentData.body_fat
+    const currentBodyFat = currentData.body_fat_percentage ?? currentData.body_fat
+    if (goalData.target_body_fat && currentBodyFat !== null && currentBodyFat !== undefined) {
+      const initial = goalData.initial_body_fat || getInitialValue('body_fat_percentage', currentBodyFat)
       const target = goalData.target_body_fat
-      const current = currentData.body_fat
+      const current = currentBodyFat
       
       const totalChange = target - initial
       const currentChange = current - initial
@@ -87,10 +112,11 @@ export const statisticsService = {
     }
 
     // Calculate muscle mass progress
-    if (goalData.target_muscle_mass && currentData.muscle_mass) {
-      const initial = goalData.initial_muscle_mass || currentData.muscle_mass
+    const currentMuscle = currentData.muscle_percentage ?? currentData.muscle_mass
+    if (goalData.target_muscle_mass && currentMuscle !== null && currentMuscle !== undefined) {
+      const initial = goalData.initial_muscle_mass || getInitialValue('muscle_percentage', currentMuscle)
       const target = goalData.target_muscle_mass
-      const current = currentData.muscle_mass
+      const current = currentMuscle
       
       const totalChange = target - initial
       const currentChange = current - initial

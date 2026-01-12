@@ -10,6 +10,7 @@ type AuthResponse struct {
 type UserInfo struct {
 	ID        int64  `json:"id"`
 	Username  string `json:"username"`
+	Nickname  string `json:"nickname,omitempty"`
 	Email     string `json:"email"`
 	Phone     string `json:"phone,omitempty"`
 	Avatar    string `json:"avatar,omitempty"`

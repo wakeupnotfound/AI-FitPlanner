@@ -21,9 +21,14 @@ type BodyDataInfo struct {
 type GoalInfo struct {
 	ID              int64   `json:"id"`
 	GoalType        string  `json:"goal_type"`
-	GoalDescription string  `json:"goal_description"`
+	GoalDescription string  `json:"goal_description,omitempty"`
+	Notes           string  `json:"notes,omitempty"`
+	InitialWeight   float64 `json:"initial_weight,omitempty"`
+	InitialBodyFat  float64 `json:"initial_body_fat,omitempty"`
+	InitialMuscle   float64 `json:"initial_muscle_mass,omitempty"`
 	TargetWeight    float64 `json:"target_weight,omitempty"`
 	Deadline        string  `json:"deadline,omitempty"`
+	TargetDate      string  `json:"target_date,omitempty"`
 	Priority        int     `json:"priority"`
 	Status          string  `json:"status"`
 	CreatedAt       string  `json:"created_at"`

@@ -8,6 +8,7 @@ import apiClient from '../services/api'
 export const useStatisticsStore = defineStore('statistics', {
   state: () => ({
     trainingStats: null,
+    trainingTrends: null,
     bodyTrends: null,
     progress: null,
     loading: false,
@@ -65,10 +66,11 @@ export const useStatisticsStore = defineStore('statistics', {
      * Get average workout duration
      */
     averageDuration: (state) => {
-      if (!state.trainingStats?.average_duration) {
+      const avg = state.trainingStats?.average_duration_minutes ?? state.trainingStats?.average_duration
+      if (!avg) {
         return 0
       }
-      return state.trainingStats.average_duration
+      return avg
     },
 
     /**
@@ -166,7 +168,7 @@ export const useStatisticsStore = defineStore('statistics', {
 
       try {
         const response = await apiClient.get('/stats/trends', { params })
-        this.bodyTrends = response.data
+        this.trainingTrends = response.data
         
         // Update date range if provided
         if (params.start_date && params.end_date) {
@@ -190,7 +192,7 @@ export const useStatisticsStore = defineStore('statistics', {
      * @param {Object} currentData - Current body data
      * @param {Object} goalData - Goal data
      */
-    async calculateProgress(currentData = null, goalData = null) {
+    async calculateProgress(currentData = null, goalData = null, history = null) {
       this.loading = true
       this.error = null
 
@@ -199,7 +201,7 @@ export const useStatisticsStore = defineStore('statistics', {
         
         if (currentData && goalData) {
           // Calculate locally if data is provided
-          response = this.calculateProgressLocally(currentData, goalData)
+          response = this.calculateProgressLocally(currentData, goalData, history)
         } else {
           // Fetch from API
           response = await apiClient.get('/stats/progress')
@@ -220,13 +222,37 @@ export const useStatisticsStore = defineStore('statistics', {
      * @param {Object} currentData - Current body data
      * @param {Object} goalData - Goal data
      */
-    calculateProgressLocally(currentData, goalData) {
+    calculateProgressLocally(currentData, goalData, history = null) {
+      const historyItems = Array.isArray(history) ? history : []
+      const goalCreatedAt = goalData?.created_at ? new Date(goalData.created_at) : null
+
+      const getInitialValue = (key, fallback) => {
+        if (!historyItems.length) return fallback
+        const filtered = goalCreatedAt
+          ? historyItems.filter((item) => {
+              if (!item.measurement_date) return false
+              const itemDate = new Date(item.measurement_date)
+              return itemDate <= goalCreatedAt
+            })
+          : historyItems
+        const sorted = filtered
+          .slice()
+          .sort((a, b) => new Date(a.measurement_date) - new Date(b.measurement_date))
+        for (const item of sorted) {
+          const value = item[key]
+          if (value !== null && value !== undefined && value !== '') {
+            return Number(value)
+          }
+        }
+        return fallback
+      }
+
       const comparison = {}
       const percentages = []
 
       // Calculate for each metric
       if (goalData.target_weight && currentData.weight) {
-        const initial = goalData.initial_weight || currentData.weight
+        const initial = goalData.initial_weight || getInitialValue('weight', currentData.weight)
         const target = goalData.target_weight
         const current = currentData.weight
         
@@ -243,10 +269,11 @@ export const useStatisticsStore = defineStore('statistics', {
         percentages.push(comparison.weight.percentage)
       }
 
-      if (goalData.target_body_fat && currentData.body_fat) {
-        const initial = goalData.initial_body_fat || currentData.body_fat
+      const currentBodyFat = currentData.body_fat_percentage ?? currentData.body_fat
+      if (goalData.target_body_fat && currentBodyFat !== null && currentBodyFat !== undefined) {
+        const initial = goalData.initial_body_fat || getInitialValue('body_fat_percentage', currentBodyFat)
         const target = goalData.target_body_fat
-        const current = currentData.body_fat
+        const current = currentBodyFat
         
         const totalChange = target - initial
         const currentChange = current - initial
@@ -261,10 +288,11 @@ export const useStatisticsStore = defineStore('statistics', {
         percentages.push(comparison.body_fat.percentage)
       }
 
-      if (goalData.target_muscle_mass && currentData.muscle_mass) {
-        const initial = goalData.initial_muscle_mass || currentData.muscle_mass
+      const currentMuscle = currentData.muscle_percentage ?? currentData.muscle_mass
+      if (goalData.target_muscle_mass && currentMuscle !== null && currentMuscle !== undefined) {
+        const initial = goalData.initial_muscle_mass || getInitialValue('muscle_percentage', currentMuscle)
         const target = goalData.target_muscle_mass
-        const current = currentData.muscle_mass
+        const current = currentMuscle
         
         const totalChange = target - initial
         const currentChange = current - initial

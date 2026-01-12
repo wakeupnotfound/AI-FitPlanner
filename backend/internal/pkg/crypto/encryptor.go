@@ -4,8 +4,10 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"golang.org/x/crypto/pbkdf2"
 	"io"
 )
 
@@ -15,26 +17,29 @@ type Encryptor interface {
 	Decrypt(ciphertext string) (string, error)
 }
 
-// AESEncryptor implements the Encryptor interface using AES-256-GCM
+// AESEncryptor implements Encryptor interface using AES-256-GCM
 type AESEncryptor struct {
 	key []byte
 }
 
 // NewEncryptor creates a new AES-256-GCM encryptor with the given secret key
-// The key must be exactly 32 bytes for AES-256
-func NewEncryptor(secretKey string) (Encryptor, error) {
-	// Ensure key length is exactly 32 bytes (256 bits)
-	key := secretKey
-	if len(key) < 32 {
-		// If key is too short, pad with zeros
-		key = fmt.Sprintf("%-32s", key)
-	} else if len(key) > 32 {
-		// If key is too long, truncate to 32 bytes
-		key = key[:32]
+// Uses PBKDF2 to derive a proper 32-byte key from the input
+func NewEncryptor(secretKey string) (*AESEncryptor, error) {
+	// Reject empty or very short keys
+	if len(secretKey) < 8 {
+		return nil, fmt.Errorf("secret key must be at least 8 characters")
 	}
 
+	// Use a deterministic salt derived from the secret key
+	// This ensures the same secret key always produces the same encryption key
+	hash := sha256.Sum256([]byte(secretKey + "salt"))
+	salt := hash[:16] // Use first 16 bytes as salt
+
+	// Derive 32-byte key using PBKDF2 with 100,000 iterations
+	key := pbkdf2.Key([]byte(secretKey), salt, 100000, 32, sha256.New)
+
 	return &AESEncryptor{
-		key: []byte(key),
+		key: key,
 	}, nil
 }
 
@@ -65,7 +70,7 @@ func (e *AESEncryptor) Encrypt(plaintext string) (string, error) {
 }
 
 // Decrypt decrypts hex-encoded ciphertext using AES-256-GCM
-// Expects the IV to be prepended to the ciphertext
+// Expects IV to be prepended to the ciphertext
 func (e *AESEncryptor) Decrypt(ciphertextHex string) (string, error) {
 	ciphertext, err := hex.DecodeString(ciphertextHex)
 	if err != nil {

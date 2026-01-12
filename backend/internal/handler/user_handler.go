@@ -57,6 +57,9 @@ func (h *UserHandler) GetProfile(c *gin.Context) {
 		},
 	}
 
+	if user.Nickname != nil {
+		resp.User.Nickname = *user.Nickname
+	}
 	if user.Phone != nil {
 		resp.User.Phone = *user.Phone
 	}
@@ -85,6 +88,9 @@ func (h *UserHandler) UpdateProfile(c *gin.Context) {
 	if req.Phone != "" {
 		serviceReq.Phone = &req.Phone
 	}
+	if req.Nickname != "" {
+		serviceReq.Nickname = &req.Nickname
+	}
 	if req.Avatar != "" {
 		serviceReq.Avatar = &req.Avatar
 	}
@@ -102,6 +108,9 @@ func (h *UserHandler) UpdateProfile(c *gin.Context) {
 		CreatedAt: user.CreatedAt.Format(time.RFC3339),
 	}
 
+	if user.Nickname != nil {
+		resp.Nickname = *user.Nickname
+	}
 	if user.Phone != nil {
 		resp.Phone = *user.Phone
 	}
@@ -125,6 +134,12 @@ func (h *UserHandler) AddBodyData(c *gin.Context) {
 		return
 	}
 
+	measurementDate, err := time.ParseInLocation("2006-01-02", req.MeasurementDate, time.Local)
+	if err != nil {
+		h.BadRequest(c, "无效的日期格式")
+		return
+	}
+
 	// Convert to service request
 	serviceReq := &service.BodyDataRequest{
 		Age:               req.Age,
@@ -133,7 +148,7 @@ func (h *UserHandler) AddBodyData(c *gin.Context) {
 		Weight:            req.Weight,
 		BodyFatPercentage: req.BodyFatPercentage,
 		MusclePercentage:  req.MusclePercentage,
-		MeasurementDate:   req.MeasurementDate,
+		MeasurementDate:   measurementDate,
 	}
 
 	bodyData, err := h.userService.AddBodyData(c.Request.Context(), userID, serviceReq)
@@ -219,10 +234,23 @@ func (h *UserHandler) SetFitnessGoals(c *gin.Context) {
 		return
 	}
 
+	goalDescription := ""
+	switch {
+	case req.GoalDescription != "":
+		goalDescription = req.GoalDescription
+	case req.Notes != nil:
+		goalDescription = *req.Notes
+	}
+
+	var goalDescriptionPtr *string
+	if goalDescription != "" {
+		goalDescriptionPtr = &goalDescription
+	}
+
 	// Convert to service request
 	serviceReq := &service.FitnessGoalRequest{
 		GoalType:        req.GoalType,
-		GoalDescription: &req.GoalDescription,
+		GoalDescription: goalDescriptionPtr,
 		TargetWeight:    req.TargetWeight,
 		Priority:        1, // Default priority
 	}
@@ -232,8 +260,12 @@ func (h *UserHandler) SetFitnessGoals(c *gin.Context) {
 	}
 
 	// Parse deadline if provided
-	if req.Deadline != nil {
-		deadline, err := time.Parse("2006-01-02", *req.Deadline)
+	deadlineValue := req.Deadline
+	if deadlineValue == nil {
+		deadlineValue = req.TargetDate
+	}
+	if deadlineValue != nil {
+		deadline, err := time.ParseInLocation("2006-01-02", *deadlineValue, time.Local)
 		if err == nil {
 			serviceReq.Deadline = &deadline
 		}
@@ -255,12 +287,23 @@ func (h *UserHandler) SetFitnessGoals(c *gin.Context) {
 
 	if goal.GoalDescription != nil {
 		resp.GoalDescription = *goal.GoalDescription
+		resp.Notes = *goal.GoalDescription
+	}
+	if goal.InitialWeight != nil {
+		resp.InitialWeight = *goal.InitialWeight
+	}
+	if goal.InitialBodyFat != nil {
+		resp.InitialBodyFat = *goal.InitialBodyFat
+	}
+	if goal.InitialMuscle != nil {
+		resp.InitialMuscle = *goal.InitialMuscle
 	}
 	if goal.TargetWeight != nil {
 		resp.TargetWeight = *goal.TargetWeight
 	}
 	if goal.Deadline != nil {
 		resp.Deadline = goal.Deadline.Format("2006-01-02")
+		resp.TargetDate = resp.Deadline
 	}
 
 	h.Created(c, resp)
@@ -302,12 +345,23 @@ func (h *UserHandler) GetFitnessGoals(c *gin.Context) {
 		}
 		if goal.GoalDescription != nil {
 			info.GoalDescription = *goal.GoalDescription
+			info.Notes = *goal.GoalDescription
+		}
+		if goal.InitialWeight != nil {
+			info.InitialWeight = *goal.InitialWeight
+		}
+		if goal.InitialBodyFat != nil {
+			info.InitialBodyFat = *goal.InitialBodyFat
+		}
+		if goal.InitialMuscle != nil {
+			info.InitialMuscle = *goal.InitialMuscle
 		}
 		if goal.TargetWeight != nil {
 			info.TargetWeight = *goal.TargetWeight
 		}
 		if goal.Deadline != nil {
 			info.Deadline = goal.Deadline.Format("2006-01-02")
+			info.TargetDate = info.Deadline
 		}
 		goalInfos = append(goalInfos, info)
 	}
@@ -352,17 +406,34 @@ func (h *UserHandler) UpdateFitnessGoals(c *gin.Context) {
 
 	// If no goals exist, create a new one
 	if len(goals) == 0 {
+		goalDescription := ""
+		switch {
+		case req.GoalDescription != "":
+			goalDescription = req.GoalDescription
+		case req.Notes != nil:
+			goalDescription = *req.Notes
+		}
+
+		var goalDescriptionPtr *string
+		if goalDescription != "" {
+			goalDescriptionPtr = &goalDescription
+		}
+
 		serviceReq := &service.FitnessGoalRequest{
 			GoalType:        req.GoalType,
-			GoalDescription: &req.GoalDescription,
+			GoalDescription: goalDescriptionPtr,
 			TargetWeight:    req.TargetWeight,
 			Priority:        1,
 		}
 		if req.Priority != nil {
 			serviceReq.Priority = *req.Priority
 		}
-		if req.Deadline != nil {
-			deadline, err := time.Parse("2006-01-02", *req.Deadline)
+		deadlineValue := req.Deadline
+		if deadlineValue == nil {
+			deadlineValue = req.TargetDate
+		}
+		if deadlineValue != nil {
+			deadline, err := time.ParseInLocation("2006-01-02", *deadlineValue, time.Local)
 			if err == nil {
 				serviceReq.Deadline = &deadline
 			}
@@ -383,12 +454,23 @@ func (h *UserHandler) UpdateFitnessGoals(c *gin.Context) {
 		}
 		if goal.GoalDescription != nil {
 			resp.GoalDescription = *goal.GoalDescription
+			resp.Notes = *goal.GoalDescription
+		}
+		if goal.InitialWeight != nil {
+			resp.InitialWeight = *goal.InitialWeight
+		}
+		if goal.InitialBodyFat != nil {
+			resp.InitialBodyFat = *goal.InitialBodyFat
+		}
+		if goal.InitialMuscle != nil {
+			resp.InitialMuscle = *goal.InitialMuscle
 		}
 		if goal.TargetWeight != nil {
 			resp.TargetWeight = *goal.TargetWeight
 		}
 		if goal.Deadline != nil {
 			resp.Deadline = goal.Deadline.Format("2006-01-02")
+			resp.TargetDate = resp.Deadline
 		}
 
 		h.Success(c, resp)
@@ -397,17 +479,34 @@ func (h *UserHandler) UpdateFitnessGoals(c *gin.Context) {
 
 	// Update the first (most recent) goal
 	goalToUpdate := goals[0]
+	goalDescription := ""
+	switch {
+	case req.GoalDescription != "":
+		goalDescription = req.GoalDescription
+	case req.Notes != nil:
+		goalDescription = *req.Notes
+	}
+
+	var goalDescriptionPtr *string
+	if goalDescription != "" {
+		goalDescriptionPtr = &goalDescription
+	}
+
 	serviceReq := &service.FitnessGoalRequest{
 		GoalType:        req.GoalType,
-		GoalDescription: &req.GoalDescription,
+		GoalDescription: goalDescriptionPtr,
 		TargetWeight:    req.TargetWeight,
 		Priority:        1,
 	}
 	if req.Priority != nil {
 		serviceReq.Priority = *req.Priority
 	}
-	if req.Deadline != nil {
-		deadline, err := time.Parse("2006-01-02", *req.Deadline)
+	deadlineValue := req.Deadline
+	if deadlineValue == nil {
+		deadlineValue = req.TargetDate
+	}
+	if deadlineValue != nil {
+		deadline, err := time.ParseInLocation("2006-01-02", *deadlineValue, time.Local)
 		if err == nil {
 			serviceReq.Deadline = &deadline
 		}
@@ -428,12 +527,23 @@ func (h *UserHandler) UpdateFitnessGoals(c *gin.Context) {
 	}
 	if goal.GoalDescription != nil {
 		resp.GoalDescription = *goal.GoalDescription
+		resp.Notes = *goal.GoalDescription
+	}
+	if goal.InitialWeight != nil {
+		resp.InitialWeight = *goal.InitialWeight
+	}
+	if goal.InitialBodyFat != nil {
+		resp.InitialBodyFat = *goal.InitialBodyFat
+	}
+	if goal.InitialMuscle != nil {
+		resp.InitialMuscle = *goal.InitialMuscle
 	}
 	if goal.TargetWeight != nil {
 		resp.TargetWeight = *goal.TargetWeight
 	}
 	if goal.Deadline != nil {
 		resp.Deadline = goal.Deadline.Format("2006-01-02")
+		resp.TargetDate = resp.Deadline
 	}
 
 	h.Success(c, resp)

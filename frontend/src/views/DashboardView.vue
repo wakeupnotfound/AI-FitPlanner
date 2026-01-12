@@ -71,7 +71,7 @@
             <van-icon name="coupon-o" class="card-icon meals-icon" />
             <span class="card-title">{{ t('dashboard.todayMeals') }}</span>
           </div>
-          <div v-if="todayMeals && todayMeals.meals?.length > 0" class="card-content">
+          <div v-if="hasTodayMeals" class="card-content">
             <div class="meals-summary">
               <div class="calories-info">
                 <span class="calories-consumed">{{ consumedCalories }}</span>
@@ -221,12 +221,32 @@ const formattedDate = computed(() => {
 
 const todayWorkout = computed(() => trainingStore.todayWorkout)
 const todayMeals = computed(() => nutritionStore.todayMeals)
+const getLocalDateKey = (date = new Date()) => {
+  const localDate = new Date(date)
+  const offsetMs = localDate.getTimezoneOffset() * 60 * 1000
+  return new Date(localDate.getTime() - offsetMs).toISOString().slice(0, 10)
+}
+const todayMealRecords = computed(() => {
+  const todayKey = getLocalDateKey()
+  return nutritionStore.mealHistory.filter(record => record.meal_date?.slice(0, 10) === todayKey)
+})
+const todayMealsList = computed(() => {
+  if (todayMealRecords.value.length > 0) {
+    return todayMealRecords.value
+  }
+  return Object.values(todayMeals.value?.meals || {})
+})
+const hasTodayMeals = computed(() => todayMealsList.value.length > 0)
 const progress = computed(() => statisticsStore.progress)
 const hasGoals = computed(() => !!userStore.goals)
 
 const consumedCalories = computed(() => {
+  if (todayMealRecords.value.length > 0) {
+    return todayMealRecords.value.reduce((sum, meal) => sum + (meal.calories || 0), 0)
+  }
   if (!todayMeals.value?.meals) return 0
-  return todayMeals.value.meals.reduce((sum, meal) => sum + (meal.total_calories || 0), 0)
+  const meals = Object.values(todayMeals.value.meals || {})
+  return meals.reduce((sum, meal) => sum + (meal?.total_calories || 0), 0)
 })
 
 const targetCalories = computed(() => {
@@ -244,7 +264,7 @@ const weeklyStats = computed(() => {
     workouts: stats?.total_workouts || 0,
     duration: stats?.total_duration_minutes || 0,
     calories: stats?.total_calories || 0,
-    meals: 0 // This would need to come from nutrition stats
+    meals: nutritionStore.mealHistory.length
   }
 })
 
@@ -268,6 +288,7 @@ const loadDashboardData = async () => {
     await Promise.all([
       trainingStore.fetchTodayWorkout().catch(() => {}),
       nutritionStore.fetchTodayMeals().catch(() => {}),
+      nutritionStore.fetchHistory().catch(() => {}),
       statisticsStore.fetchDashboardSummary().catch(() => {}),
       userStore.fetchGoals().catch(() => {})
     ])

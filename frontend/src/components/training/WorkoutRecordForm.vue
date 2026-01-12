@@ -185,6 +185,12 @@ const emit = defineEmits(['submit', 'cancel'])
 const hasInjury = ref(false)
 const activeExercises = ref([0])
 
+const getLocalDateString = () => {
+  const now = new Date()
+  const offsetMs = now.getTimezoneOffset() * 60 * 1000
+  return new Date(now.getTime() - offsetMs).toISOString().slice(0, 10)
+}
+
 // Initialize form data from workout
 const initializeExercises = () => {
   if (!props.workout?.exercises) return []
@@ -215,7 +221,7 @@ const initializeSets = (setsCount, reps, weight) => {
 // Form data
 const formData = reactive({
   plan_id: props.planId,
-  workout_date: new Date().toISOString().split('T')[0],
+  workout_date: props.workout?.date || getLocalDateString(),
   workout_type: props.workout?.type || 'strength',
   duration_minutes: props.workout?.duration || 60,
   exercises: initializeExercises(),
@@ -281,10 +287,10 @@ const handleSubmit = () => {
 
   const submitData = {
     plan_id: formData.plan_id,
-    workout_date: formData.workout_date,
+    workout_date: props.workout?.date || formData.workout_date,
     workout_type: formData.workout_type,
     duration_minutes: formData.duration_minutes,
-    exercises,
+    exercises: { items: exercises },
     performance_data: formData.performance_data,
     notes: formData.notes || null,
     rating: formData.rating,
@@ -304,6 +310,7 @@ watch(hasInjury, (value) => {
 // Watch workout prop changes
 watch(() => props.workout, () => {
   formData.exercises = initializeExercises()
+  formData.workout_date = props.workout?.date || getLocalDateString()
 }, { deep: true })
 </script>
 

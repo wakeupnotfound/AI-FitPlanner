@@ -55,7 +55,7 @@ export const aiService = {
    * @returns {Promise<Object>} Response confirming default set
    */
   async setDefault(configId) {
-    return apiClient.put(`/ai-apis/${configId}/default`)
+    return apiClient.post(`/ai-apis/${configId}/set-default`)
   },
 
   /**

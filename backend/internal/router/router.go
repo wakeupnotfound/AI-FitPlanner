@@ -175,6 +175,7 @@ func setupProtectedRoutes(rg *gin.RouterGroup, deps *Dependencies) {
 		generation := nutritionPlans.Group("")
 		generation.Use(deps.RateLimiter.AIGenerationRateLimitMiddleware())
 		generation.POST("/generate", nutritionHandler.GeneratePlan)
+		nutritionPlans.GET("/tasks/:taskId", nutritionHandler.GetPlanStatus)
 
 		// Regular endpoints
 		nutritionPlans.GET("", nutritionHandler.ListPlans)

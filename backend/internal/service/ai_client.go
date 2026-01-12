@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/ai-fitness-planner/backend/internal/model"
@@ -273,34 +274,44 @@ func (c *WenxinClient) TestConnection(ctx context.Context, config *AIClientConfi
 	return err
 }
 
-// TongyiClient implements AIClient for Alibaba Tongyi API
+// TongyiClient implements AIClient for Alibaba Tongyi API using OpenAI-compatible format
 type TongyiClient struct{}
 
-// TongyiRequest represents the request structure for Tongyi API
+// TongyiRequest represents the OpenAI-compatible request structure for Tongyi API
 type TongyiRequest struct {
-	Model string `json:"model"`
-	Input struct {
-		Messages []Message `json:"messages"`
-	} `json:"input"`
-	Parameters struct {
-		Temperature float32 `json:"temperature,omitempty"`
-		MaxTokens   int     `json:"max_tokens,omitempty"`
-	} `json:"parameters"`
+	Model       string    `json:"model"`
+	Messages    []Message `json:"messages"`
+	Temperature float32   `json:"temperature,omitempty"`
+	MaxTokens   int       `json:"max_tokens,omitempty"`
 }
 
-// TongyiResponse represents the response structure from Tongyi API
+// TongyiResponse represents the OpenAI-compatible response structure from Tongyi API
 type TongyiResponse struct {
-	Output struct {
-		Text         string `json:"text"`
+	ID      string `json:"id"`
+	Object  string `json:"object"`
+	Created int64  `json:"created"`
+	Model   string `json:"model"`
+	Choices []struct {
+		Index   int `json:"index"`
+		Message struct {
+			Role    string `json:"role"`
+			Content string `json:"content"`
+		} `json:"message"`
 		FinishReason string `json:"finish_reason"`
-	} `json:"output"`
-	Usage     Usage  `json:"usage"`
-	RequestID string `json:"request_id"`
-	Code      string `json:"code,omitempty"`
-	Message   string `json:"message,omitempty"`
+	} `json:"choices"`
+	Usage struct {
+		PromptTokens     int `json:"prompt_tokens"`
+		CompletionTokens int `json:"completion_tokens"`
+		TotalTokens      int `json:"total_tokens"`
+	} `json:"usage"`
+	Error *struct {
+		Message string `json:"message"`
+		Type    string `json:"type"`
+		Code    string `json:"code"`
+	} `json:"error,omitempty"`
 }
 
-// Call sends a request to Tongyi API
+// Call sends a request to Tongyi API using OpenAI-compatible format
 func (c *TongyiClient) Call(ctx context.Context, prompt string, config *AIClientConfig) (string, error) {
 	model := config.Model
 	if model == "" {
@@ -315,20 +326,40 @@ func (c *TongyiClient) Call(ctx context.Context, prompt string, config *AIClient
 		temperature = 0.7
 	}
 
+	// Use OpenAI-compatible format
 	var reqBody TongyiRequest
 	reqBody.Model = model
-	reqBody.Input.Messages = []Message{
+	reqBody.Messages = []Message{
 		{Role: "user", Content: prompt},
 	}
-	reqBody.Parameters.Temperature = temperature
-	reqBody.Parameters.MaxTokens = maxTokens
+	reqBody.Temperature = temperature
+	reqBody.MaxTokens = maxTokens
 
 	jsonData, err := json.Marshal(reqBody)
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", config.APIEndpoint, bytes.NewBuffer(jsonData))
+	// Ensure the endpoint uses the OpenAI-compatible format
+	endpoint := strings.TrimSpace(config.APIEndpoint)
+	defaultEndpoint := "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions"
+	if endpoint == "" {
+		endpoint = defaultEndpoint
+	} else if strings.Contains(endpoint, "compatible-mode") {
+		if !strings.Contains(endpoint, "/chat/completions") {
+			endpoint = strings.TrimRight(endpoint, "/")
+			if strings.HasSuffix(endpoint, "compatible-mode") || strings.HasSuffix(endpoint, "compatible-mode/v1") {
+				endpoint = endpoint + "/chat/completions"
+			} else {
+				endpoint = endpoint + "/v1/chat/completions"
+			}
+		}
+	} else {
+		// If user provided a custom endpoint without compatible-mode, use the standard one
+		endpoint = defaultEndpoint
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", endpoint, bytes.NewBuffer(jsonData))
 	if err != nil {
 		return "", fmt.Errorf("failed to create request: %w", err)
 	}
@@ -348,16 +379,46 @@ func (c *TongyiClient) Call(ctx context.Context, prompt string, config *AIClient
 		return "", fmt.Errorf("failed to read response: %w", err)
 	}
 
+	// Add debug logging for response
+	fmt.Printf("Tongyi API Response Status: %d\n", resp.StatusCode)
+	fmt.Printf("Tongyi API Response Body: %s\n", string(body))
+	fmt.Printf("Tongyi API Response Headers: %v\n", resp.Header)
+
+	statusCode := resp.StatusCode
+	if statusCode < http.StatusOK || statusCode >= http.StatusMultipleChoices {
+		if len(body) == 0 {
+			return "", fmt.Errorf("Tongyi API error: status %d, empty body", statusCode)
+		}
+		var tongyiResp TongyiResponse
+		if err := json.Unmarshal(body, &tongyiResp); err == nil && tongyiResp.Error != nil {
+			return "", fmt.Errorf("Tongyi API error: %s (type: %s, code: %s)",
+				tongyiResp.Error.Message, tongyiResp.Error.Type, tongyiResp.Error.Code)
+		}
+		return "", fmt.Errorf("Tongyi API error: status %d, body: %s", statusCode, string(body))
+	}
+
+	// Check if response is empty
+	if len(body) == 0 {
+		return "", fmt.Errorf("empty response from Tongyi API (status %d)", statusCode)
+	}
+
 	var tongyiResp TongyiResponse
 	if err := json.Unmarshal(body, &tongyiResp); err != nil {
-		return "", fmt.Errorf("failed to unmarshal response: %w", err)
+		return "", fmt.Errorf("failed to unmarshal response: %w, response body: %s", err, string(body))
 	}
 
-	if tongyiResp.Code != "" && tongyiResp.Code != "Success" {
-		return "", fmt.Errorf("Tongyi API error: %s", tongyiResp.Message)
+	// Check for API errors
+	if tongyiResp.Error != nil {
+		return "", fmt.Errorf("Tongyi API error: %s (type: %s, code: %s)", 
+			tongyiResp.Error.Message, tongyiResp.Error.Type, tongyiResp.Error.Code)
 	}
 
-	return tongyiResp.Output.Text, nil
+	// Check if we have choices
+	if len(tongyiResp.Choices) == 0 {
+		return "", fmt.Errorf("no choices in Tongyi API response")
+	}
+
+	return tongyiResp.Choices[0].Message.Content, nil
 }
 
 // TestConnection tests the connection to Tongyi API

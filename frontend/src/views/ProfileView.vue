@@ -75,7 +75,7 @@
     <!-- Fitness Goals Section -->
     <van-cell-group :title="t('profile.goals')" inset class="section">
       <template v-if="goals">
-        <van-cell :title="t('profile.goalType')" :value="t(`profile.goalTypes.${goals.goal_type}`)" />
+        <van-cell :title="t('profile.goalType')" :value="formatGoalType(goals.goal_type)" />
         <van-cell v-if="goals.target_weight" :title="t('profile.targetWeight')" :value="`${goals.target_weight} ${t('profile.kg')}`" />
         <van-cell v-if="goals.target_body_fat" :title="t('profile.targetBodyFat')" :value="`${goals.target_body_fat}${t('profile.percent')}`" />
         <van-cell v-if="goals.target_date" :title="t('profile.targetDate')" :value="formatDate(goals.target_date)" />
@@ -120,6 +120,41 @@
         </van-nav-bar>
         <van-form ref="profileFormRef">
           <van-cell-group inset>
+            <van-cell :title="t('profile.avatar')">
+              <div class="avatar-edit">
+                <van-image
+                  round
+                  width="64"
+                  height="64"
+                  :src="editForm.avatar || userAvatar"
+                  fit="cover"
+                  class="avatar-preview"
+                >
+                  <template #error>
+                    <van-icon name="user-o" size="32" />
+                  </template>
+                </van-image>
+                <div class="avatar-actions">
+                  <van-uploader
+                    accept="image/*"
+                    :max-count="1"
+                    :after-read="onAvatarRead"
+                  >
+                    <van-button size="small" plain type="primary">
+                      {{ t('profile.uploadAvatar') }}
+                    </van-button>
+                  </van-uploader>
+                  <van-button
+                    size="small"
+                    plain
+                    type="default"
+                    @click="clearAvatar"
+                  >
+                    {{ t('profile.removeAvatar') }}
+                  </van-button>
+                </div>
+              </div>
+            </van-cell>
             <van-field
               v-model="editForm.nickname"
               :label="t('profile.nickname')"
@@ -276,6 +311,13 @@ const { t } = useI18n()
 const { formatDate } = useLocale()
 const userStore = useUserStore()
 const { logout } = useAuth()
+
+const formatGoalType = (goalType) => {
+  if (!goalType) {
+    return t('profile.goalTypeUnknown')
+  }
+  return t(`profile.goalTypes.${goalType}`)
+}
 
 // State
 const loading = ref(false)
@@ -437,6 +479,67 @@ const onDateConfirm = ({ selectedValues }) => {
   showDatePicker.value = false
 }
 
+const readFileAsDataURL = (file) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result)
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
+}
+
+const loadImage = (src) => {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => resolve(img)
+    img.onerror = reject
+    img.src = src
+  })
+}
+
+const compressAvatar = async (payload) => {
+  const sourceFile = payload?.file
+  let dataUrl = payload?.content
+
+  if (!dataUrl && sourceFile) {
+    dataUrl = await readFileAsDataURL(sourceFile)
+  }
+
+  if (!dataUrl) {
+    throw new Error('No image data')
+  }
+
+  const img = await loadImage(dataUrl)
+  const maxSize = 512
+  const scale = Math.min(1, maxSize / Math.max(img.width, img.height))
+  const targetWidth = Math.round(img.width * scale)
+  const targetHeight = Math.round(img.height * scale)
+
+  const canvas = document.createElement('canvas')
+  canvas.width = targetWidth
+  canvas.height = targetHeight
+  const ctx = canvas.getContext('2d')
+  if (!ctx) {
+    throw new Error('No canvas context')
+  }
+  ctx.drawImage(img, 0, 0, targetWidth, targetHeight)
+
+  return canvas.toDataURL('image/jpeg', 0.8)
+}
+
+const onAvatarRead = async (file) => {
+  const payload = Array.isArray(file) ? file[0] : file
+  try {
+    editForm.avatar = await compressAvatar(payload)
+  } catch (error) {
+    showToast({ type: 'fail', message: t('profile.avatarCompressFailed') })
+  }
+}
+
+const clearAvatar = () => {
+  editForm.avatar = ''
+}
+
 const handleLogout = async () => {
   try {
     await showConfirmDialog({
@@ -485,7 +588,7 @@ watch(showGoalsForm, (val) => {
   flex-direction: column;
   align-items: center;
   padding: 24px 16px;
-  background: linear-gradient(135deg, var(--van-primary-color), var(--van-primary-color-dark));
+  background: linear-gradient(135deg, #1f4d7a, #17304d);
   color: white;
   gap: 12px;
 }
@@ -508,13 +611,13 @@ watch(showGoalsForm, (val) => {
 .email {
   margin: 4px 0;
   font-size: 14px;
-  opacity: 0.9;
+  opacity: 0.95;
 }
 
 .member-since {
   margin: 0;
   font-size: 12px;
-  opacity: 0.7;
+  opacity: 0.85;
 }
 
 .section {
@@ -529,8 +632,27 @@ watch(showGoalsForm, (val) => {
 
 .data-label {
   font-size: 12px;
-  color: var(--van-text-color-2);
+  color: var(--van-text-color);
   margin-top: 4px;
+}
+
+.avatar-edit {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.avatar-preview {
+  border: 2px solid rgba(255, 255, 255, 0.6);
+}
+
+.avatar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .popup-content {

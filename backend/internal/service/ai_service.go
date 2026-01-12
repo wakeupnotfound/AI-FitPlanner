@@ -103,8 +103,7 @@ func (s *aiService) GenerateTrainingPlan(ctx context.Context, params *TrainingPl
 	// Create client config
 	config := NewAIClientFromModel(aiAPI, apiKey)
 
-	// Call AI with retry logic
-	var response string
+	// Call AI with retry logic (including parse errors)
 	var lastErr error
 	for attempt := 0; attempt <= s.maxRetries; attempt++ {
 		if attempt > 0 {
@@ -117,40 +116,39 @@ func (s *aiService) GenerateTrainingPlan(ctx context.Context, params *TrainingPl
 			}
 		}
 
-		response, lastErr = client.Call(ctx, prompt, config)
-		if lastErr == nil {
-			break
+		response, err := client.Call(ctx, prompt, config)
+		if err != nil {
+			lastErr = err
+			continue
 		}
+
+		planData, err := s.parseTrainingPlanResponse(response)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+
+		// Create training plan model
+		startDate := time.Now()
+		endDate := startDate.AddDate(0, 0, params.DurationWeeks*7)
+
+		trainingPlan := &model.TrainingPlan{
+			UserID:          params.UserID,
+			PlanName:        params.PlanName,
+			StartDate:       startDate,
+			EndDate:         endDate,
+			TotalWeeks:      params.DurationWeeks,
+			DifficultyLevel: params.DifficultyLevel,
+			TrainingPurpose: &params.Goal,
+			AIAPIID:         params.AIAPIID,
+			PlanData:        planData,
+			Status:          "active",
+		}
+
+		return trainingPlan, nil
 	}
 
-	if lastErr != nil {
-		return nil, fmt.Errorf("failed to generate training plan after %d attempts: %w", s.maxRetries+1, lastErr)
-	}
-
-	// Parse AI response
-	planData, err := s.parseTrainingPlanResponse(response)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse AI response: %w", err)
-	}
-
-	// Create training plan model
-	startDate := time.Now()
-	endDate := startDate.AddDate(0, 0, params.DurationWeeks*7)
-
-	trainingPlan := &model.TrainingPlan{
-		UserID:          params.UserID,
-		PlanName:        params.PlanName,
-		StartDate:       startDate,
-		EndDate:         endDate,
-		TotalWeeks:      params.DurationWeeks,
-		DifficultyLevel: params.DifficultyLevel,
-		TrainingPurpose: &params.Goal,
-		AIAPIID:         params.AIAPIID,
-		PlanData:        planData,
-		Status:          "active",
-	}
-
-	return trainingPlan, nil
+	return nil, fmt.Errorf("failed to generate training plan after %d attempts: %w", s.maxRetries+1, lastErr)
 }
 
 // GenerateNutritionPlan generates a nutrition plan using AI with retry logic
@@ -182,8 +180,7 @@ func (s *aiService) GenerateNutritionPlan(ctx context.Context, params *Nutrition
 	// Create client config
 	config := NewAIClientFromModel(aiAPI, apiKey)
 
-	// Call AI with retry logic
-	var response string
+	// Call AI with retry logic (including parse errors)
 	var lastErr error
 	for attempt := 0; attempt <= s.maxRetries; attempt++ {
 		if attempt > 0 {
@@ -196,43 +193,42 @@ func (s *aiService) GenerateNutritionPlan(ctx context.Context, params *Nutrition
 			}
 		}
 
-		response, lastErr = client.Call(ctx, prompt, config)
-		if lastErr == nil {
-			break
+		response, err := client.Call(ctx, prompt, config)
+		if err != nil {
+			lastErr = err
+			continue
 		}
+
+		planData, err := s.parseNutritionPlanResponse(response)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+
+		// Create nutrition plan model
+		startDate := time.Now()
+		endDate := startDate.AddDate(0, 0, params.DurationDays)
+
+		nutritionPlan := &model.NutritionPlan{
+			UserID:              params.UserID,
+			PlanName:            params.PlanName,
+			StartDate:           startDate,
+			EndDate:             endDate,
+			DailyCalories:       params.DailyCalories,
+			ProteinRatio:        params.ProteinRatio,
+			CarbRatio:           params.CarbRatio,
+			FatRatio:            params.FatRatio,
+			DietaryRestrictions: model.JSONSlice(interfaceSlice(params.DietaryRestrictions)),
+			Preferences:         model.JSONSlice(interfaceSlice(params.Preferences)),
+			PlanData:            planData,
+			AIAPIID:             params.AIAPIID,
+			Status:              "active",
+		}
+
+		return nutritionPlan, nil
 	}
 
-	if lastErr != nil {
-		return nil, fmt.Errorf("failed to generate nutrition plan after %d attempts: %w", s.maxRetries+1, lastErr)
-	}
-
-	// Parse AI response
-	planData, err := s.parseNutritionPlanResponse(response)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse AI response: %w", err)
-	}
-
-	// Create nutrition plan model
-	startDate := time.Now()
-	endDate := startDate.AddDate(0, 0, params.DurationDays)
-
-	nutritionPlan := &model.NutritionPlan{
-		UserID:              params.UserID,
-		PlanName:            params.PlanName,
-		StartDate:           startDate,
-		EndDate:             endDate,
-		DailyCalories:       params.DailyCalories,
-		ProteinRatio:        params.ProteinRatio,
-		CarbRatio:           params.CarbRatio,
-		FatRatio:            params.FatRatio,
-		DietaryRestrictions: model.JSONSlice(interfaceSlice(params.DietaryRestrictions)),
-		Preferences:         model.JSONSlice(interfaceSlice(params.Preferences)),
-		PlanData:            planData,
-		AIAPIID:             params.AIAPIID,
-		Status:              "active",
-	}
-
-	return nutritionPlan, nil
+	return nil, fmt.Errorf("failed to generate nutrition plan after %d attempts: %w", s.maxRetries+1, lastErr)
 }
 
 // TestConnection tests the connection to an AI API
@@ -340,13 +336,13 @@ Please generate a comprehensive training plan in JSON format with the following 
           "focus_area": "upper_body|lower_body|full_body|cardio",
           "exercises": [
             {
-              "name": "Exercise name",
+              "name": "中文动作名称",
               "sets": 4,
               "reps": "8-10",
               "weight": "70kg or bodyweight",
               "rest": "90s",
               "difficulty": "easy|medium|hard",
-              "safety_notes": "Important safety considerations"
+              "safety_notes": "标准姿势与注意事项（中文，简洁）"
             }
           ],
           "duration": 60,
@@ -364,8 +360,11 @@ Ensure the plan:
 4. Considers any injuries or health conditions
 5. Fits within the user's available time
 6. Includes safety notes for complex exercises
+7. Uses Chinese exercise names and Chinese safety notes
 
-Return ONLY the JSON object, no additional text.`
+Return ONLY the JSON object, no additional text.
+The response must start with "{" and end with "}".
+If you cannot generate the full plan, return {"weeks": []}.`
 
 	return prompt
 }
@@ -462,7 +461,9 @@ Ensure the plan:
 5. Includes meal timing suggestions
 6. Lists specific portion sizes
 
-Return ONLY the JSON object, no additional text.`
+Return ONLY the JSON object, no additional text.
+The response must start with "{" and end with "}".
+If you cannot generate the full plan, return {"days": []}.`
 
 	return prompt
 }
@@ -477,7 +478,14 @@ func (s *aiService) parseTrainingPlanResponse(response string) (model.JSONMap, e
 
 	var planData model.JSONMap
 	if err := json.Unmarshal([]byte(jsonStr), &planData); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal JSON: %w", err)
+		var weeks []interface{}
+		if err := json.Unmarshal([]byte(jsonStr), &weeks); err == nil {
+			planData = model.JSONMap{
+				"weeks": weeks,
+			}
+		} else {
+			return nil, fmt.Errorf("failed to unmarshal JSON: %w", err)
+		}
 	}
 
 	// Validate structure
@@ -498,7 +506,14 @@ func (s *aiService) parseNutritionPlanResponse(response string) (model.JSONMap, 
 
 	var planData model.JSONMap
 	if err := json.Unmarshal([]byte(jsonStr), &planData); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal JSON: %w", err)
+		var days []interface{}
+		if err := json.Unmarshal([]byte(jsonStr), &days); err == nil {
+			planData = model.JSONMap{
+				"days": days,
+			}
+		} else {
+			return nil, fmt.Errorf("failed to unmarshal JSON: %w", err)
+		}
 	}
 
 	// Validate structure
@@ -525,6 +540,33 @@ func extractJSON(s string) string {
 		} else if c == '}' {
 			braceCount--
 			if braceCount == 0 && start != -1 {
+				end = i + 1
+				break
+			}
+		}
+	}
+
+	if start == -1 || end == -1 {
+		return extractJSONArray(s)
+	}
+
+	return s[start:end]
+}
+
+func extractJSONArray(s string) string {
+	start := -1
+	end := -1
+	bracketCount := 0
+
+	for i, c := range s {
+		if c == '[' {
+			if start == -1 {
+				start = i
+			}
+			bracketCount++
+		} else if c == ']' {
+			bracketCount--
+			if bracketCount == 0 && start != -1 {
 				end = i + 1
 				break
 			}

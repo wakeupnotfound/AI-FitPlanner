@@ -1,6 +1,7 @@
 package validator
 
 import (
+	"net/url"
 	"regexp"
 	"strings"
 	"time"
@@ -24,10 +25,50 @@ func NewCustomValidator() *CustomValidator {
 	_ = v.RegisterValidation("date_range", validateDateRange)
 	_ = v.RegisterValidation("macro_ratio", validateMacroRatio)
 	_ = v.RegisterValidation("future_date", validateNotFutureDate)
+	_ = v.RegisterValidation("avatar", validateAvatar)
 
 	return &CustomValidator{
 		validator: v,
 	}
+}
+
+const (
+	maxAvatarURLLength    = 2048
+	maxAvatarDataURLBytes = 500000
+)
+
+var avatarDataURLRegex = regexp.MustCompile(`^data:image/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=]+$`)
+
+func validateAvatar(fl validator.FieldLevel) bool {
+	value := strings.TrimSpace(fl.Field().String())
+	if value == "" {
+		return true
+	}
+
+	if strings.HasPrefix(value, "data:image/") {
+		if len(value) > maxAvatarDataURLBytes {
+			return false
+		}
+		return avatarDataURLRegex.MatchString(value)
+	}
+
+	if len(value) > maxAvatarURLLength {
+		return false
+	}
+
+	parsed, err := url.ParseRequestURI(value)
+	if err != nil {
+		return false
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return false
+	}
+	return parsed.Host != ""
+}
+
+// ValidateAvatar is the exported version for registration
+func ValidateAvatar(fl validator.FieldLevel) bool {
+	return validateAvatar(fl)
 }
 
 // Validate validates a struct
@@ -155,16 +196,16 @@ func validateNotFutureDate(fl validator.FieldLevel) bool {
 		return true // Let required validator handle empty values
 	}
 
-	// Parse the date
-	date, err := time.Parse("2006-01-02", dateStr)
+	// Parse the date in local time to avoid timezone skew
+	date, err := time.ParseInLocation("2006-01-02", dateStr, time.Local)
 	if err != nil {
 		return false
 	}
 
 	// Check if date is not in the future (date should be <= today)
 	now := time.Now()
-	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
-	dateOnly := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, time.UTC)
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
+	dateOnly := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, time.Local)
 	return !dateOnly.After(today)
 }
 

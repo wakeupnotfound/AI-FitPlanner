@@ -15,14 +15,12 @@ import (
 func main() {
 	// Initialize configuration
 	if err := config.InitConfig(); err != nil {
-		fmt.Printf("Failed to initialize config: %v\n", err)
-		os.Exit(1)
+		logger.Fatal("Failed to initialize config", zap.Error(err))
 	}
 
 	// Initialize logger
 	if err := logger.InitLogger(); err != nil {
-		fmt.Printf("Failed to initialize logger: %v\n", err)
-		os.Exit(1)
+		logger.Fatal("Failed to initialize logger", zap.Error(err))
 	}
 	defer logger.Logger.Sync()
 

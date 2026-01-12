@@ -206,7 +206,7 @@ const formData = reactive({
 const providers = [
   { value: 'openai', text: 'OpenAI', endpoint: 'https://api.openai.com/v1' },
   { value: 'wenxin', text: '文心一言（百度）', endpoint: 'https://aip.baidubce.com' },
-  { value: 'tongyi', text: '通义千问（阿里）', endpoint: 'https://dashscope.aliyuncs.com' }
+  { value: 'tongyi', text: '通义千问（阿里）', endpoint: 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions' }
 ]
 
 const providerOptions = computed(() => 

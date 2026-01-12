@@ -34,7 +34,7 @@
         type="primary"
         :loading="testing"
         :loading-text="t('ai.testing')"
-        @click="$emit('test', config.id)"
+        @click="emit('test', config.id)"
       >
         <van-icon name="play-circle-o" />
         {{ t('ai.testConnection') }}
@@ -78,6 +78,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
+const emit = defineEmits(['test', 'set-default', 'delete', 'edit'])
 
 const props = defineProps({
   config: {
@@ -89,8 +90,6 @@ const props = defineProps({
     default: false
   }
 })
-
-defineEmits(['test', 'set-default', 'delete', 'edit'])
 
 // Provider display info
 const providerInfo = {
@@ -113,14 +112,14 @@ const providerLabel = computed(() =>
 
 // Status display
 const statusType = computed(() => {
-  if (props.config.status === 'active' || props.config.status === 1) {
+  if (props.config.status === 'active' || props.config.status === 1 || props.config.status === true || props.config.status === 'success') {
     return 'success'
   }
   return 'warning'
 })
 
 const statusLabel = computed(() => {
-  if (props.config.status === 'active' || props.config.status === 1) {
+  if (props.config.status === 'active' || props.config.status === 1 || props.config.status === true || props.config.status === 'success') {
     return t('ai.active')
   }
   return t('ai.inactive')

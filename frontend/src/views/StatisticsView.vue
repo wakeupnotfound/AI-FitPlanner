@@ -71,7 +71,7 @@
       <!-- Body Trends Section -->
       <van-cell-group :title="t('statistics.bodyTrends')" inset>
         <!-- Metric Tabs -->
-        <van-tabs v-model="activeMetric" shrink>
+        <van-tabs v-model:active="activeMetric" shrink>
           <van-tab :title="t('statistics.weight')" name="weight" />
           <van-tab :title="t('statistics.bodyFat')" name="body_fat" />
           <van-tab :title="t('statistics.muscleMass')" name="muscle_mass" />
@@ -80,6 +80,7 @@
         <!-- Body Trends Chart -->
         <div v-if="hasBodyData" class="body-chart-container">
           <ChartWidget
+            :key="activeMetric"
             :title="getMetricTitle(activeMetric)"
             type="line"
             :data="bodyTrendData"
@@ -188,38 +189,75 @@ const activeMetric = ref('weight')
 // Computed
 const trainingStats = computed(() => {
   const stats = statisticsStore.trainingStats || {}
+  const startDate = stats.start_date ? new Date(stats.start_date) : null
+  const endDate = stats.end_date ? new Date(stats.end_date) : null
+  let frequency = stats.workout_frequency || 0
+
+  if (!frequency && startDate && endDate) {
+    const msPerDay = 24 * 60 * 60 * 1000
+    const days = Math.max(1, Math.round((endDate - startDate) / msPerDay) + 1)
+    const weeks = days / 7
+    frequency = stats.total_workouts ? (stats.total_workouts / weeks) : 0
+    frequency = Math.round(frequency * 10) / 10
+  }
+
   return {
     totalWorkouts: stats.total_workouts || 0,
-    totalDuration: stats.total_duration || 0,
-    avgDuration: stats.average_duration || 0,
-    frequency: stats.workout_frequency || 0,
+    totalDuration: stats.total_duration_minutes || stats.total_duration || 0,
+    avgDuration: stats.average_duration_minutes || stats.average_duration || 0,
+    frequency,
     caloriesBurned: stats.total_calories || 0
   }
 })
 
 const trainingChartData = computed(() => {
+  const trends = statisticsStore.trainingTrends
+  if (trends?.data_points?.length) {
+    return trends.data_points.map(item => ({
+      date: item.start_date,
+      value: item.total_duration_minutes || 0,
+      label: item.period_label || item.start_date
+    }))
+  }
+
   const stats = statisticsStore.trainingStats
-  if (!stats?.daily_stats) return []
-  
-  return stats.daily_stats.map(item => ({
-    date: item.date,
-    value: item.duration || 0,
-    label: item.date
-  }))
+  if (!stats?.total_duration_minutes) {
+    return []
+  }
+
+  return [
+    {
+      date: stats.end_date || '',
+      value: stats.total_duration_minutes,
+      label: stats.end_date || t('statistics.totalDuration')
+    }
+  ]
 })
 
 const bodyTrendData = computed(() => {
-  const trends = statisticsStore.bodyTrends
-  if (!trends) return []
-  
-  const metricData = trends[activeMetric.value]
-  if (!Array.isArray(metricData)) return []
-  
-  return metricData.map(item => ({
-    date: item.record_date || item.date,
-    value: item.value || item[activeMetric.value] || 0,
-    label: item.record_date || item.date
-  }))
+  const items = userStore.bodyDataHistory || []
+  if (!items.length) return []
+
+  const keyMap = {
+    weight: 'weight',
+    body_fat: 'body_fat_percentage',
+    muscle_mass: 'muscle_percentage'
+  }
+  const valueKey = keyMap[activeMetric.value]
+
+  const filtered = items.filter(item => item[valueKey] !== null && item[valueKey] !== undefined)
+  if (!filtered.length) {
+    return []
+  }
+
+  return filtered
+    .slice()
+    .reverse()
+    .map(item => ({
+      date: item.measurement_date,
+      value: Number(item[valueKey]) || 0,
+      label: item.measurement_date
+    }))
 })
 
 const hasBodyData = computed(() => {
@@ -235,7 +273,8 @@ const progress = computed(() => {
   
   return statisticsService.calculateProgress(
     userStore.latestBodyData,
-    userStore.goals
+    userStore.goals,
+    userStore.bodyDataHistory
   )
 })
 
@@ -281,7 +320,7 @@ const getMetricUnit = (metric) => {
   const units = {
     weight: t('statistics.kg'),
     body_fat: t('statistics.percent'),
-    muscle_mass: t('statistics.kg')
+    muscle_mass: t('statistics.percent')
   }
   return units[metric] || ''
 }
@@ -292,8 +331,8 @@ const getCurrentValue = (metric) => {
   
   const keyMap = {
     weight: 'weight',
-    body_fat: 'body_fat',
-    muscle_mass: 'muscle_mass'
+    body_fat: 'body_fat_percentage',
+    muscle_mass: 'muscle_percentage'
   }
   
   return latestData[keyMap[metric]] || '-'

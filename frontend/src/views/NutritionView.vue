@@ -46,7 +46,7 @@
             <!-- Nutrition Summary Card -->
             <NutritionSummaryCard
               :consumed-calories="todayTotalCalories"
-              :target-calories="currentPlan.daily_calories"
+              :target-calories="currentPlan?.daily_calories || 0"
               :consumed-protein="todayTotalProtein"
               :target-protein="dailyProteinTarget"
               :consumed-carbs="todayTotalCarbs"
@@ -58,15 +58,15 @@
             <!-- Meal Schedule -->
             <van-cell-group inset :title="t('nutrition.mealSchedule')" class="meal-list">
               <van-cell
-                v-for="meal in todayMeals.meals"
-                :key="meal.meal_type"
-                :title="t(`nutrition.mealTypes.${meal.meal_type}`)"
-                :label="formatMealTime(meal.time)"
+                v-for="meal in todayMealsList"
+                :key="meal.meal_type || meal.time"
+                :title="meal.meal_type ? t(`nutrition.mealTypes.${meal.meal_type}`) : meal.time"
+                :label="formatMealTime(meal.time || meal.meal_date)"
                 is-link
                 @click="viewMealDetails(meal)"
               >
                 <template #value>
-                  <span class="meal-calories">{{ meal.total_calories }} {{ t('nutrition.kcal') }}</span>
+                  <span class="meal-calories">{{ getMealCalories(meal) }} {{ t('nutrition.kcal') }}</span>
                 </template>
               </van-cell>
             </van-cell-group>
@@ -100,10 +100,28 @@
           </div>
 
           <!-- Plan Generation Progress -->
-          <div v-else-if="isGenerating" class="generating-container">
+          <div v-else-if="isGeneratingDisplay" class="generating-container">
             <van-loading type="spinner" size="48" color="var(--van-primary-color)" />
             <h3>{{ t('nutrition.generating') }}</h3>
             <p>{{ t('nutrition.generatingHint') }}</p>
+            <van-progress
+              :percentage="generationProgress"
+              stroke-width="8"
+              color="var(--van-primary-color)"
+            />
+          </div>
+
+          <!-- Generation Error -->
+          <div v-else-if="generationError" class="generation-error">
+            <van-empty
+              image="error"
+              :description="t('nutrition.planGenerateFailed')"
+            >
+              <div class="error-detail">{{ generationError }}</div>
+              <van-button type="primary" plain @click="showPlanForm = true">
+                {{ t('nutrition.generatePlan') }}
+              </van-button>
+            </van-empty>
           </div>
 
           <!-- No Plans -->
@@ -128,10 +146,10 @@
               <van-cell :border="false">
                 <template #title>
                   <div class="plan-header">
-                    <span class="plan-name">{{ plan.name }}</span>
-                    <van-tag v-if="plan.status === 'active'" type="success" size="small">
-                      {{ t('training.active') }}
-                    </van-tag>
+                  <span class="plan-name">{{ plan.plan_name || plan.name }}</span>
+                  <van-tag v-if="plan.status === 'active'" type="success" size="small">
+                    {{ t('training.active') }}
+                  </van-tag>
                   </div>
                 </template>
                 <template #label>
@@ -161,15 +179,15 @@
                 <div class="macro-ratios">
                   <div class="macro-item">
                     <span class="macro-label">{{ t('nutrition.protein') }}</span>
-                    <span class="macro-value">{{ plan.protein_ratio || 30 }}%</span>
+                    <span class="macro-value">{{ Math.round((plan.protein_ratio || 0) * 100) }}%</span>
                   </div>
                   <div class="macro-item">
                     <span class="macro-label">{{ t('nutrition.carbs') }}</span>
-                    <span class="macro-value">{{ plan.carbs_ratio || 40 }}%</span>
+                    <span class="macro-value">{{ Math.round((plan.carb_ratio || 0) * 100) }}%</span>
                   </div>
                   <div class="macro-item">
                     <span class="macro-label">{{ t('nutrition.fat') }}</span>
-                    <span class="macro-value">{{ plan.fat_ratio || 30 }}%</span>
+                    <span class="macro-value">{{ Math.round((plan.fat_ratio || 0) * 100) }}%</span>
                   </div>
                 </div>
               </van-cell>
@@ -229,7 +247,7 @@
                   @click="viewMealRecord(meal)"
                 >
                   <template #value>
-                    <span class="meal-calories">{{ meal.total_calories }} {{ t('nutrition.kcal') }}</span>
+                    <span class="meal-calories">{{ getMealCalories(meal) }} {{ t('nutrition.kcal') }}</span>
                   </template>
                 </van-cell>
               </van-cell-group>
@@ -253,13 +271,22 @@
           <van-form @submit="handleGeneratePlan">
             <van-cell-group inset>
               <van-field
-                v-model="planForm.name"
-                :label="t('ai.name')"
-                :placeholder="t('ai.name')"
-                :rules="[{ required: true }]"
+                v-model="planForm.plan_name"
+                :label="t('nutrition.planName')"
+                :placeholder="t('nutrition.planName')"
+                :rules="[{ required: true, message: t('nutrition.validation.planNameRequired') }]"
                 autocapitalize="words"
                 inputmode="text"
                 enterkeyhint="next"
+              />
+              <van-field
+                v-model.number="planForm.duration_days"
+                type="digit"
+                inputmode="numeric"
+                enterkeyhint="next"
+                :label="t('nutrition.durationDays')"
+                :placeholder="t('nutrition.durationDays')"
+                :rules="[{ required: true, message: t('nutrition.validation.durationRequired') }]"
               />
               <van-field
                 v-model.number="planForm.daily_calories"
@@ -284,7 +311,7 @@
                 <template #button>%</template>
               </van-field>
               <van-field
-                v-model.number="planForm.carbs_ratio"
+                v-model.number="planForm.carb_ratio"
                 type="number"
                 inputmode="numeric"
                 enterkeyhint="next"
@@ -356,13 +383,13 @@
       closeable
     >
       <div class="plan-details-popup" v-if="selectedPlan">
-        <van-nav-bar :title="selectedPlan.name" />
+        <van-nav-bar :title="selectedPlan.plan_name || selectedPlan.name" />
         <div class="plan-details-content">
           <van-cell-group inset>
             <van-cell :title="t('nutrition.dailyCalories')" :value="`${selectedPlan.daily_calories} ${t('nutrition.kcal')}`" />
-            <van-cell :title="t('nutrition.protein')" :value="`${selectedPlan.protein_ratio || 30}%`" />
-            <van-cell :title="t('nutrition.carbs')" :value="`${selectedPlan.carbs_ratio || 40}%`" />
-            <van-cell :title="t('nutrition.fat')" :value="`${selectedPlan.fat_ratio || 30}%`" />
+            <van-cell :title="t('nutrition.protein')" :value="`${Math.round((selectedPlan.protein_ratio || 0) * 100)}%`" />
+            <van-cell :title="t('nutrition.carbs')" :value="`${Math.round((selectedPlan.carb_ratio || 0) * 100)}%`" />
+            <van-cell :title="t('nutrition.fat')" :value="`${Math.round((selectedPlan.fat_ratio || 0) * 100)}%`" />
           </van-cell-group>
 
           <!-- Dietary Restrictions -->
@@ -411,6 +438,86 @@
       </div>
     </van-popup>
 
+    <!-- Meal Record Details Popup -->
+    <van-popup
+      v-model:show="showRecordDetails"
+      position="bottom"
+      round
+      :style="{ height: '80%' }"
+      closeable
+    >
+      <div class="meal-record-details" v-if="selectedMealRecord">
+        <van-nav-bar :title="t('nutrition.recordMeal')" />
+        <div class="meal-record-content">
+          <van-cell-group inset>
+            <van-cell :title="t('nutrition.mealType')" :value="t(`nutrition.mealTypes.${selectedMealRecord.meal_type}`)" />
+            <van-cell :title="t('nutrition.mealTime')" :value="formatMealTime(selectedMealRecord.meal_date)" />
+            <van-cell :title="t('nutrition.calories')" :value="`${selectedMealRecord.calories || 0} ${t('nutrition.kcal')}`" />
+          </van-cell-group>
+
+          <van-cell-group inset :title="t('nutrition.foods')">
+            <van-cell
+              v-for="(food, idx) in getRecordFoods(selectedMealRecord)"
+              :key="idx"
+              :title="food.name"
+              :label="`${food.amount}${food.unit} - ${food.calories} ${t('nutrition.kcal')}`"
+            >
+              <template #value>
+                <span class="food-macros">{{ food.protein || 0 }}P / {{ food.carbs || 0 }}C / {{ food.fat || 0 }}F</span>
+              </template>
+            </van-cell>
+          </van-cell-group>
+
+          <van-cell-group inset v-if="selectedMealRecord.notes" :title="t('nutrition.notes')">
+            <van-cell :border="false" :label="selectedMealRecord.notes" />
+          </van-cell-group>
+        </div>
+      </div>
+    </van-popup>
+
+    <!-- Meal Schedule Details Popup -->
+    <van-popup
+      v-model:show="showMealDetailsPopup"
+      position="bottom"
+      round
+      :style="{ height: '80%' }"
+      closeable
+    >
+      <div class="meal-record-details" v-if="selectedMealDetail">
+        <van-nav-bar :title="t('nutrition.mealSchedule')" />
+        <div class="meal-record-content">
+          <van-cell-group inset>
+            <van-cell
+              :title="t('nutrition.mealType')"
+              :value="selectedMealDetail.meal_type ? t(`nutrition.mealTypes.${selectedMealDetail.meal_type}`) : selectedMealDetail.time"
+            />
+            <van-cell
+              v-if="selectedMealDetail.time || selectedMealDetail.meal_date"
+              :title="t('nutrition.mealTime')"
+              :value="formatMealTime(selectedMealDetail.time || selectedMealDetail.meal_date)"
+            />
+            <van-cell
+              :title="t('nutrition.calories')"
+              :value="`${getMealCalories(selectedMealDetail)} ${t('nutrition.kcal')}`"
+            />
+          </van-cell-group>
+
+          <van-cell-group inset :title="t('nutrition.foods')">
+            <van-cell
+              v-for="(food, idx) in getMealFoods(selectedMealDetail)"
+              :key="idx"
+              :title="food.name"
+              :label="`${food.amount}${food.unit} - ${food.calories} ${t('nutrition.kcal')}`"
+            >
+              <template #value>
+                <span class="food-macros">{{ food.protein || 0 }}P / {{ food.carbs || 0 }}C / {{ food.fat || 0 }}F</span>
+              </template>
+            </van-cell>
+          </van-cell-group>
+        </div>
+      </div>
+    </van-popup>
+
     <!-- Navigation Bar -->
     <NavigationBar />
   </div>
@@ -423,6 +530,7 @@ import { useI18n } from 'vue-i18n'
 import { showToast } from 'vant'
 import { useNutritionStore } from '@/stores/nutrition'
 import { useAIConfigStore } from '@/stores/aiConfig'
+import { nutritionService } from '@/services/nutrition.service'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import NavigationBar from '@/components/common/NavigationBar.vue'
 
@@ -448,17 +556,27 @@ const submittingRecord = ref(false)
 const showPlanForm = ref(false)
 const showRecordForm = ref(false)
 const showPlanDetails = ref(false)
+const showRecordDetails = ref(false)
+const showMealDetailsPopup = ref(false)
+const generationTaskId = ref(null)
+const generationProgress = ref(0)
+const generationInterval = ref(null)
+const generationError = ref('')
+const isGeneratingTask = ref(false)
 
 // Selected items
 const selectedPlan = ref(null)
+const selectedMealRecord = ref(null)
+const selectedMealDetail = ref(null)
 const activeMeals = ref([0])
 
 // Plan form
 const planForm = ref({
-  name: '',
+  plan_name: '',
+  duration_days: 7,
   daily_calories: 2000,
   protein_ratio: 30,
-  carbs_ratio: 40,
+  carb_ratio: 40,
   fat_ratio: 30,
   dietary_restrictions: []
 })
@@ -476,40 +594,68 @@ const plans = computed(() => nutritionStore.allPlans)
 const history = computed(() => nutritionStore.mealHistory)
 const historyGroupedByDate = computed(() => nutritionStore.mealHistoryGroupedByDate)
 const isGenerating = computed(() => nutritionStore.isGeneratingPlan)
+const isGeneratingDisplay = computed(() => isGenerating.value || isGeneratingTask.value)
 
 const todayTotalCalories = computed(() => nutritionStore.todayTotalCalories)
+const todayKey = computed(() => getLocalDateKey(new Date()))
+const todayMealRecords = computed(() => {
+  return history.value.filter(record => normalizeRecordDate(record.meal_date) === todayKey.value)
+})
+const todayMealsList = computed(() => {
+  if (todayMealRecords.value.length > 0) {
+    return todayMealRecords.value.map(record => ({
+      ...record,
+      total_calories: record.calories,
+      time: record.meal_date
+    }))
+  }
+  const meals = Object.values(todayMeals.value?.meals || {})
+  return meals
+})
 
 const todayTotalProtein = computed(() => {
+  if (todayMealRecords.value.length > 0) {
+    return todayMealRecords.value.reduce((total, meal) => total + (meal.protein || 0), 0)
+  }
   if (!todayMeals.value?.meals) return 0
-  return todayMeals.value.meals.reduce((total, meal) => total + (meal.total_protein || 0), 0)
+  const meals = Object.values(todayMeals.value.meals || {})
+  return meals.reduce((total, meal) => total + (meal?.total_protein || 0), 0)
 })
 
 const todayTotalCarbs = computed(() => {
+  if (todayMealRecords.value.length > 0) {
+    return todayMealRecords.value.reduce((total, meal) => total + (meal.carbs || 0), 0)
+  }
   if (!todayMeals.value?.meals) return 0
-  return todayMeals.value.meals.reduce((total, meal) => total + (meal.total_carbs || 0), 0)
+  const meals = Object.values(todayMeals.value.meals || {})
+  return meals.reduce((total, meal) => total + (meal?.total_carbs || 0), 0)
 })
 
 const todayTotalFat = computed(() => {
+  if (todayMealRecords.value.length > 0) {
+    return todayMealRecords.value.reduce((total, meal) => total + (meal.fat || 0), 0)
+  }
   if (!todayMeals.value?.meals) return 0
-  return todayMeals.value.meals.reduce((total, meal) => total + (meal.total_fat || 0), 0)
+  const meals = Object.values(todayMeals.value.meals || {})
+  return meals.reduce((total, meal) => total + (meal?.total_fat || 0), 0)
 })
 
 const dailyProteinTarget = computed(() => {
   if (!currentPlan.value) return 0
-  const ratio = currentPlan.value.protein_ratio || 30
-  return Math.round((currentPlan.value.daily_calories * ratio / 100) / 4)
+  const ratio = currentPlan.value.protein_ratio || 0.3
+  return Math.round((currentPlan.value.daily_calories * ratio) / 4)
 })
 
 const dailyCarbsTarget = computed(() => {
   if (!currentPlan.value) return 0
-  const ratio = currentPlan.value.carbs_ratio || 40
-  return Math.round((currentPlan.value.daily_calories * ratio / 100) / 4)
+  const ratio = currentPlan.value.carb_ratio || 0.4
+  return Math.round((currentPlan.value.daily_calories * ratio) / 4)
 })
 
 const dailyFatTarget = computed(() => {
   if (!currentPlan.value) return 0
-  const ratio = currentPlan.value.fat_ratio || 30
-  return Math.round((currentPlan.value.daily_calories * ratio / 100) / 9)
+  const ratio = currentPlan.value.fat_ratio || 0.3
+  return Math.round((currentPlan.value.daily_calories * ratio) / 9)
 })
 
 // Methods
@@ -568,21 +714,35 @@ const onRefreshHistory = async () => {
 const handleGeneratePlan = async () => {
   try {
     const defaultConfig = aiConfigStore.defaultConfig
+    const proteinRatio = planForm.value.protein_ratio > 1 ? planForm.value.protein_ratio / 100 : planForm.value.protein_ratio
+    const carbRatio = planForm.value.carb_ratio > 1 ? planForm.value.carb_ratio / 100 : planForm.value.carb_ratio
+    const fatRatio = planForm.value.fat_ratio > 1 ? planForm.value.fat_ratio / 100 : planForm.value.fat_ratio
     const planData = {
       ...planForm.value,
+      protein_ratio: proteinRatio,
+      carb_ratio: carbRatio,
+      fat_ratio: fatRatio,
       ai_api_id: defaultConfig?.id
     }
     
-    await nutritionStore.generatePlan(planData)
-    showToast({ type: 'success', message: t('nutrition.planReady') })
-    showPlanForm.value = false
+    const response = await nutritionStore.generatePlan(planData)
+    const taskId = response?.data?.task_id
+    if (taskId) {
+      generationTaskId.value = taskId
+      startPollingTaskStatus()
+      showPlanForm.value = false
+    } else {
+      showToast({ type: 'success', message: t('nutrition.planReady') })
+      showPlanForm.value = false
+    }
     
     // Reset form
     planForm.value = {
-      name: '',
+      plan_name: '',
+      duration_days: 7,
       daily_calories: 2000,
       protein_ratio: 30,
-      carbs_ratio: 40,
+      carb_ratio: 40,
       fat_ratio: 30,
       dietary_restrictions: []
     }
@@ -591,12 +751,44 @@ const handleGeneratePlan = async () => {
   }
 }
 
+const startPollingTaskStatus = () => {
+  generationProgress.value = 0
+  generationError.value = ''
+  isGeneratingTask.value = true
+  generationInterval.value = setInterval(async () => {
+    try {
+      const response = await nutritionService.checkTaskStatus(generationTaskId.value)
+      const task = response?.data?.task || response?.data
+      if (task) {
+        generationProgress.value = task.progress || 0
+        if (task.status === 'completed') {
+          clearInterval(generationInterval.value)
+          isGeneratingTask.value = false
+          showToast({ type: 'success', message: t('nutrition.planReady') })
+          await loadPlans()
+          await nutritionStore.fetchTodayMeals()
+        } else if (task.status === 'failed') {
+          clearInterval(generationInterval.value)
+          isGeneratingTask.value = false
+          generationError.value = task.error_message || t('error.unknown')
+          showToast({ type: 'fail', message: task.error_message || t('error.unknown') })
+        }
+      }
+    } catch (error) {
+      clearInterval(generationInterval.value)
+      isGeneratingTask.value = false
+      console.error('Failed to check task status:', error)
+    }
+  }, 2000)
+}
+
 const handleRecordMeal = async (mealData) => {
   submittingRecord.value = true
   try {
     await nutritionStore.recordMeal(mealData)
     showToast({ type: 'success', message: t('nutrition.recordSuccess') })
     showRecordForm.value = false
+    await nutritionStore.fetchHistory()
     await nutritionStore.fetchTodayMeals()
   } catch (error) {
     showToast({ type: 'fail', message: t('nutrition.recordFailed') })
@@ -614,23 +806,48 @@ const toggleRestriction = (restriction) => {
   }
 }
 
-const viewPlanDetails = (plan) => {
-  selectedPlan.value = plan
-  showPlanDetails.value = true
+const viewPlanDetails = async (plan) => {
+  try {
+    if (!plan?.plan_data) {
+      const response = await nutritionStore.fetchPlan(plan.id)
+      selectedPlan.value = response?.data?.plan || response?.data || plan
+    } else {
+      selectedPlan.value = plan
+    }
+    showPlanDetails.value = true
+  } catch (error) {
+    showToast({ type: 'fail', message: t('error.unknown') })
+  }
 }
 
 const viewMealDetails = (meal) => {
-  console.log('View meal details:', meal)
+  selectedMealDetail.value = meal
+  showMealDetailsPopup.value = true
 }
 
 const viewMealRecord = (meal) => {
-  console.log('View meal record:', meal)
+  selectedMealRecord.value = meal
+  showRecordDetails.value = true
 }
 
 const formatDate = (dateStr) => {
   if (!dateStr) return ''
   const date = new Date(dateStr)
   return date.toLocaleDateString()
+}
+
+const normalizeRecordDate = (dateValue) => {
+  if (!dateValue) return ''
+  if (typeof dateValue === 'string') {
+    return dateValue.slice(0, 10)
+  }
+  return getLocalDateKey(dateValue)
+}
+
+const getLocalDateKey = (date) => {
+  const localDate = new Date(date)
+  const offsetMs = localDate.getTimezoneOffset() * 60 * 1000
+  return new Date(localDate.getTime() - offsetMs).toISOString().slice(0, 10)
 }
 
 const formatMealTime = (timeStr) => {
@@ -641,8 +858,34 @@ const formatMealTime = (timeStr) => {
   return timeStr
 }
 
+const getMealCalories = (meal) => {
+  return meal?.total_calories ?? meal?.calories ?? 0
+}
+
 const calculateDayTotal = (meals) => {
-  return meals.reduce((total, meal) => total + (meal.total_calories || 0), 0)
+  return meals.reduce((total, meal) => total + getMealCalories(meal), 0)
+}
+
+const getRecordFoods = (record) => {
+  const foods = record?.foods
+  if (Array.isArray(foods)) {
+    return foods
+  }
+  if (foods && Array.isArray(foods.items)) {
+    return foods.items
+  }
+  return []
+}
+
+const getMealFoods = (meal) => {
+  const foods = meal?.foods
+  if (Array.isArray(foods)) {
+    return foods
+  }
+  if (foods && Array.isArray(foods.items)) {
+    return foods.items
+  }
+  return []
 }
 
 // Watch tab changes to load data
@@ -701,6 +944,27 @@ onMounted(() => {
   margin: 0;
   color: var(--van-text-color-2);
   font-size: 14px;
+}
+
+.generating-container .van-progress {
+  width: 80%;
+  margin-top: 16px;
+}
+
+.generation-error {
+  padding: 16px;
+}
+
+.generation-error .error-detail {
+  margin: 8px auto 16px;
+  max-width: 520px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #fff7e6;
+  border: 1px solid #ffd591;
+  color: #8c4a0d;
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .meal-list {
@@ -803,6 +1067,23 @@ onMounted(() => {
   flex: 1;
   overflow-y: auto;
   padding: 16px 0;
+}
+
+.meal-record-details {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.meal-record-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 0;
+}
+
+.food-macros {
+  font-size: 12px;
+  color: var(--van-text-color-2);
 }
 
 .form-actions {

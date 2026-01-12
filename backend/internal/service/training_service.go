@@ -299,8 +299,9 @@ func (s *trainingService) RecordTraining(ctx context.Context, userID int64, reco
 	// Property 12: Future Date Rejection
 	now := time.Now()
 	// Truncate to start of day for comparison
-	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-	workoutDate := time.Date(record.WorkoutDate.Year(), record.WorkoutDate.Month(), record.WorkoutDate.Day(), 0, 0, 0, 0, record.WorkoutDate.Location())
+	todayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
+	localWorkout := record.WorkoutDate.In(time.Local)
+	workoutDate := time.Date(localWorkout.Year(), localWorkout.Month(), localWorkout.Day(), 0, 0, 0, 0, time.Local)
 
 	if workoutDate.After(todayStart) {
 		return errors.New(errors.ErrInvalidParam, "训练日期不能是未来日期")

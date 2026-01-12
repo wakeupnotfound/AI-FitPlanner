@@ -60,13 +60,16 @@ export const useAIConfigStore = defineStore('aiConfig', {
       this.error = null
 
       try {
-        const response = await apiClient.get('/ai/configs')
-        this.configs = response.data || []
+        const response = await apiClient.get('/ai-apis')
+        // Ensure response has data property and it's an array
+        this.configs = response.data?.apis || response.data || []
         
         // Update default config
-        const defaultCfg = this.configs.find(config => config.is_default)
-        if (defaultCfg) {
-          this.defaultConfig = defaultCfg
+        if (this.configs && this.configs.length > 0) {
+          const defaultCfg = this.configs.find(config => config.is_default)
+          if (defaultCfg) {
+            this.defaultConfig = defaultCfg
+          }
         }
         
         return response
@@ -88,19 +91,24 @@ export const useAIConfigStore = defineStore('aiConfig', {
     async addConfig(configData) {
       this.loading = true
       this.error = null
-
+      
       try {
-        const response = await apiClient.post('/ai/configs', configData)
-        this.configs.push(response.data)
+        const response = await apiClient.post('/ai-apis', configData)
         
-        // If this is the first config, set it as default
-        if (this.configs.length === 1) {
-          this.defaultConfig = response.data
+        // Validate response before using it
+        if (response.data) {
+          this.configs.push(response.data)
+          
+          // If this is the first config, set it as default
+          if (this.configs.length === 1) {
+            this.defaultConfig = response.data
+          }
         }
         
         return response
       } catch (error) {
         this.error = error
+        console.error('AI Config add error:', error)
         throw error
       } finally {
         this.loading = false
@@ -111,23 +119,34 @@ export const useAIConfigStore = defineStore('aiConfig', {
      * Test AI API connection
      * @param {number} configId - Configuration ID
      */
-    async testConnection(configId) {
+     async testConnection(configId) {
+      if (!configId) {
+        throw new Error('配置ID无效')
+      }
+      
       this.testingConnection = true
       this.error = null
-
+      
       try {
-        const response = await apiClient.post(`/ai/configs/${configId}/test`)
+        const response = await apiClient.post(`/ai-apis/${configId}/test`)
         
         // Update config status in local state
         const configIndex = this.configs.findIndex(c => c.id === configId)
         if (configIndex !== -1) {
-          this.configs[configIndex].status = response.data.status
+          const testStatus = response.data.test_result?.status
+          if (testStatus) {
+            this.configs[configIndex].status = testStatus === 'success'
+          } else if (typeof response.data.status !== 'undefined') {
+            this.configs[configIndex].status = response.data.status
+          }
           this.configs[configIndex].last_test_at = new Date().toISOString()
         }
         
+        // Return full response data for component to handle
         return response
       } catch (error) {
         this.error = error
+        console.error('AI Config test error:', error)
         throw error
       } finally {
         this.testingConnection = false
@@ -143,7 +162,7 @@ export const useAIConfigStore = defineStore('aiConfig', {
       this.error = null
 
       try {
-        const response = await apiClient.put(`/ai/configs/${configId}/default`)
+        const response = await apiClient.post(`/ai-apis/${configId}/set-default`)
         
         // Update is_default flag for all configs
         this.configs = this.configs.map(config => ({
@@ -172,7 +191,7 @@ export const useAIConfigStore = defineStore('aiConfig', {
       this.error = null
 
       try {
-        await apiClient.delete(`/ai/configs/${configId}`)
+        await apiClient.delete(`/ai-apis/${configId}`)
         
         // Remove config from local state
         const deletedConfig = this.configs.find(c => c.id === configId)
@@ -183,7 +202,7 @@ export const useAIConfigStore = defineStore('aiConfig', {
           this.defaultConfig = null
           
           // Set first remaining config as default if any exist
-          if (this.configs.length > 0) {
+          if (this.configs && this.configs.length > 0) {
             await this.setDefault(this.configs[0].id)
           }
         }
@@ -207,7 +226,7 @@ export const useAIConfigStore = defineStore('aiConfig', {
       this.error = null
 
       try {
-        const response = await apiClient.put(`/ai/configs/${configId}`, configData)
+        const response = await apiClient.put(`/ai-apis/${configId}`, configData)
         
         // Update config in local state
         const configIndex = this.configs.findIndex(c => c.id === configId)

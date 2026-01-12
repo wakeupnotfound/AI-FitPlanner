@@ -73,6 +73,38 @@ func (h *NutritionHandler) GeneratePlan(c *gin.Context) {
 	h.Success(c, resp)
 }
 
+// GetPlanStatus handles GET /api/v1/nutrition-plans/tasks/:taskId
+// Requirements: 6.2
+func (h *NutritionHandler) GetPlanStatus(c *gin.Context) {
+	taskID := c.Param("taskId")
+	if taskID == "" {
+		h.BadRequest(c, "任务ID不能为空")
+		return
+	}
+
+	taskStatus, err := h.nutritionService.GetPlanStatus(c.Request.Context(), taskID)
+	if err != nil {
+		h.Error(c, err)
+		return
+	}
+
+	resp := response.TaskResponse{
+		TaskID:   taskStatus.TaskID,
+		Status:   taskStatus.Status,
+		Progress: taskStatus.Progress,
+	}
+
+	if taskStatus.Error != "" {
+		resp.ErrorMessage = taskStatus.Error
+	}
+
+	if taskStatus.Result != nil {
+		resp.Result = h.buildPlanInfo(taskStatus.Result)
+	}
+
+	h.Success(c, resp)
+}
+
 // ListPlans handles GET /api/v1/nutrition-plans
 // Requirements: 6.3
 func (h *NutritionHandler) ListPlans(c *gin.Context) {

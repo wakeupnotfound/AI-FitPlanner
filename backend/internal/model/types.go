@@ -63,10 +63,11 @@ func (j JSONSlice) Value() (driver.Value, error) {
 type User struct {
 	ID           int64     `gorm:"primaryKey;autoIncrement" json:"id"`
 	Username     string    `gorm:"uniqueIndex;size:50;not null" json:"username" validate:"required,min=3,max=50"`
+	Nickname     *string   `gorm:"size:50" json:"nickname" validate:"omitempty,min=1,max=50"`
 	Email        string    `gorm:"uniqueIndex;size:100;not null" json:"email" validate:"required,email,max=100"`
 	Phone        *string   `gorm:"size:20" json:"phone" validate:"omitempty,max=20"`
 	PasswordHash string    `gorm:"size:255;not null" json:"-"`
-	Avatar       *string   `gorm:"size:255" json:"avatar" validate:"omitempty,url,max=255"`
+	Avatar       *string   `gorm:"type:mediumtext" json:"avatar" validate:"omitempty,avatar"`
 	Status       int8      `gorm:"default:1" json:"status" validate:"oneof=0 1"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`

@@ -31,6 +31,18 @@
             </van-button>
           </van-empty>
 
+          <!-- Plan Generation Progress -->
+          <div v-else-if="isGeneratingDisplay" class="generating-container">
+            <van-loading type="spinner" size="48" color="var(--van-primary-color)" />
+            <h3>{{ t('training.generating') }}</h3>
+            <p>{{ t('training.generatingHint') }}</p>
+            <van-progress
+              :percentage="generationProgress"
+              stroke-width="8"
+              color="var(--van-primary-color)"
+            />
+          </div>
+
           <!-- No Plan State -->
           <van-empty
             v-else-if="!currentPlan"
@@ -91,6 +103,9 @@
                     <span v-if="exercise.weight">{{ exercise.weight }}</span>
                     <span v-if="exercise.rest">{{ t('training.rest') }}: {{ exercise.rest }}</span>
                   </div>
+                  <div v-if="exercise.safety_notes" class="exercise-safety">
+                    {{ exercise.safety_notes }}
+                  </div>
                 </template>
                 <template #right-icon>
                   <van-icon name="arrow" />
@@ -129,7 +144,7 @@
           </div>
 
           <!-- Plan Generation Progress -->
-          <div v-else-if="isGenerating" class="generating-container">
+          <div v-else-if="isGeneratingDisplay" class="generating-container">
             <van-loading type="spinner" size="48" color="var(--van-primary-color)" />
             <h3>{{ t('training.generating') }}</h3>
             <p>{{ t('training.generatingHint') }}</p>
@@ -138,6 +153,19 @@
               stroke-width="8"
               color="var(--van-primary-color)"
             />
+          </div>
+
+          <!-- Generation Error -->
+          <div v-else-if="generationError" class="generation-error">
+            <van-empty
+              image="error"
+              :description="t('training.planGenerateFailed')"
+            >
+              <div class="error-detail">{{ generationError }}</div>
+              <van-button type="primary" plain @click="showAssessment = true">
+                {{ t('training.generatePlan') }}
+              </van-button>
+            </van-empty>
           </div>
 
           <!-- No Plans -->
@@ -157,6 +185,8 @@
               v-for="plan in plans"
               :key="plan.id"
               :plan="plan"
+              :completed-count="getPlanCompletedCount(plan)"
+              :total-count="getPlanTotalCount(plan)"
               @view="viewPlanDetails"
               @start="startPlanWorkout"
             />
@@ -222,7 +252,7 @@
                 inset
                 class="history-item"
               >
-                <van-cell :border="false">
+                <van-cell :border="false" is-link @click="viewRecordDetails(record)">
                   <template #title>
                     <div class="history-header">
                       <span class="history-date">{{ formatDate(record.workout_date) }}</span>
@@ -242,15 +272,15 @@
                   </template>
                 </van-cell>
                 <van-cell
-                  v-if="record.exercises && record.exercises.length > 0"
+                  v-if="getRecordExercises(record).length > 0"
                   :border="false"
                 >
                   <div class="history-exercises">
-                    <span v-for="(ex, i) in record.exercises.slice(0, 3)" :key="i" class="exercise-tag">
+                    <span v-for="(ex, i) in getRecordExercises(record).slice(0, 3)" :key="i" class="exercise-tag">
                       {{ ex.exercise_name }}
                     </span>
-                    <span v-if="record.exercises.length > 3" class="more-tag">
-                      +{{ record.exercises.length - 3 }}
+                    <span v-if="getRecordExercises(record).length > 3" class="more-tag">
+                      +{{ getRecordExercises(record).length - 3 }}
                     </span>
                   </div>
                 </van-cell>
@@ -287,6 +317,7 @@
       <WorkoutRecordForm
         v-if="todayWorkout"
         :workout="todayWorkout"
+        :plan-id="activePlanId"
         :loading="submittingRecord"
         @submit="handleRecordSubmit"
         @cancel="showRecordForm = false"
@@ -302,10 +333,10 @@
       closeable
     >
       <div class="plan-details-popup" v-if="selectedPlan">
-        <van-nav-bar :title="selectedPlan.name" />
+        <van-nav-bar :title="selectedPlan.plan_name || selectedPlan.name" />
         <div class="plan-details-content">
           <van-cell-group inset>
-            <van-cell :title="t('training.goal')" :value="t(`training.goals.${selectedPlan.goal}`)" />
+            <van-cell :title="t('training.goal')" :value="formatPlanGoal(selectedPlan)" />
             <van-cell :title="t('training.difficulty')" :value="t(`training.difficultyLevels.${selectedPlan.difficulty_level || selectedPlan.difficulty}`)" />
             <van-cell :title="t('training.totalWeeks')" :value="selectedPlan.total_weeks || selectedPlan.duration_weeks" />
             <van-cell :title="t('training.status')" :value="t(`training.${selectedPlan.status}`)" />
@@ -335,6 +366,53 @@
               </div>
             </van-collapse-item>
           </van-collapse>
+        </div>
+      </div>
+    </van-popup>
+
+    <!-- Record Details Popup -->
+    <van-popup
+      v-model:show="showRecordDetails"
+      position="bottom"
+      round
+      :style="{ height: '80%' }"
+      closeable
+    >
+      <div class="record-details-popup" v-if="selectedRecord">
+        <van-nav-bar :title="t('training.recordWorkout')" />
+        <div class="record-details-content">
+          <van-cell-group inset>
+            <van-cell :title="t('training.date')" :value="formatDate(selectedRecord.workout_date)" />
+            <van-cell :title="t('training.workoutType')" :value="t(`training.workoutTypes.${selectedRecord.workout_type}`)" />
+            <van-cell :title="t('training.duration')" :value="`${selectedRecord.duration_minutes || 0} ${t('training.minutes')}`" />
+            <van-cell v-if="selectedRecord.rating" :title="t('training.rating')" :value="selectedRecord.rating" />
+          </van-cell-group>
+
+          <van-cell-group inset :title="t('training.exercises')">
+            <van-cell
+              v-for="(ex, idx) in getRecordExercises(selectedRecord)"
+              :key="idx"
+              :title="ex.exercise_name"
+            >
+              <template #label>
+                <div class="record-exercise-meta">
+                  <span>{{ ex.sets }} {{ t('training.sets') }}</span>
+                  <span>{{ t('training.reps') }}: {{ ex.reps_per_set?.join(', ') || '-' }}</span>
+                  <span>{{ t('training.weight') }}: {{ ex.weight_used?.join(', ') || '-' }}</span>
+                </div>
+                <div v-if="ex.notes" class="record-exercise-notes">
+                  {{ ex.notes }}
+                </div>
+              </template>
+            </van-cell>
+          </van-cell-group>
+
+          <van-cell-group inset v-if="selectedRecord.notes" :title="t('training.notes')">
+            <van-cell :border="false" :label="selectedRecord.notes" />
+          </van-cell-group>
+          <van-cell-group inset v-if="selectedRecord.injury_report" :title="t('training.injuryReport')">
+            <van-cell :border="false" :label="selectedRecord.injury_report" />
+          </van-cell-group>
         </div>
       </div>
     </van-popup>
@@ -380,9 +458,11 @@ const showAssessment = ref(false)
 const showRecordForm = ref(false)
 const showPlanDetails = ref(false)
 const showCalendar = ref(false)
+const showRecordDetails = ref(false)
 
 // Selected items
 const selectedPlan = ref(null)
+const selectedRecord = ref(null)
 const selectedDate = ref(new Date())
 const activeWeeks = ref([1])
 
@@ -390,6 +470,8 @@ const activeWeeks = ref([1])
 const generationTaskId = ref(null)
 const generationProgress = ref(0)
 const generationInterval = ref(null)
+const generationError = ref('')
+const isGeneratingTask = ref(false)
 
 // Computed
 const hasAIConfig = computed(() => aiConfigStore.hasDefaultConfig)
@@ -398,6 +480,8 @@ const todayWorkout = computed(() => trainingStore.getTodayWorkout)
 const plans = computed(() => trainingStore.allPlans)
 const history = computed(() => trainingStore.trainingHistory)
 const isGenerating = computed(() => trainingStore.isGeneratingPlan)
+const isGeneratingDisplay = computed(() => isGenerating.value || isGeneratingTask.value)
+const activePlanId = computed(() => currentPlan.value?.id || plans.value?.[0]?.id || null)
 
 const isRestDay = computed(() => {
   return todayWorkout.value?.type === 'rest' || todayWorkout.value?.rest_day
@@ -405,6 +489,7 @@ const isRestDay = computed(() => {
 
 const canCompleteWorkout = computed(() => {
   if (!todayWorkout.value?.exercises) return false
+  if (isRecordedToday.value) return false
   return todayWorkout.value.exercises.some(e => e.completed)
 })
 
@@ -420,10 +505,50 @@ const selectedDateDisplay = computed(() => {
   return selectedDate.value.toLocaleDateString()
 })
 
+const getLocalDateKey = (date) => {
+  const localDate = new Date(date)
+  const offsetMs = localDate.getTimezoneOffset() * 60 * 1000
+  return new Date(localDate.getTime() - offsetMs).toISOString().slice(0, 10)
+}
+
+const normalizeRecordDate = (dateValue) => {
+  if (!dateValue) return ''
+  if (typeof dateValue === 'string') {
+    if (dateValue.length >= 10) {
+      return dateValue.slice(0, 10)
+    }
+    return dateValue
+  }
+  return getLocalDateKey(dateValue)
+}
+
 const filteredHistory = computed(() => {
-  // For now, show all history. Can be filtered by selectedDate if needed
-  return history.value
+  if (!selectedDate.value) return history.value
+  const selectedKey = getLocalDateKey(selectedDate.value)
+  return history.value.filter(record => normalizeRecordDate(record.workout_date) === selectedKey)
 })
+
+const isRecordedToday = computed(() => {
+  if (!todayWorkout.value) return false
+  const workoutDate = normalizeRecordDate(todayWorkout.value.date || todayWorkout.value.workout_date)
+  return history.value.some(record => {
+    const recordDate = normalizeRecordDate(record.workout_date)
+    if (recordDate !== workoutDate) return false
+    if (!activePlanId.value) return true
+    return record.plan_id === activePlanId.value
+  })
+})
+
+const syncTodayWorkoutCompletion = () => {
+  if (!todayWorkout.value) return
+  const exercises = todayWorkout.value.exercises || []
+  todayWorkout.value.is_completed = isRecordedToday.value
+  todayWorkout.value.completed_exercises = isRecordedToday.value ? exercises.length : 0
+  todayWorkout.value.exercises = exercises.map(ex => ({
+    ...ex,
+    completed: isRecordedToday.value ? true : ex.completed
+  }))
+}
 
 // Methods
 const loadData = async () => {
@@ -432,8 +557,10 @@ const loadData = async () => {
     await Promise.all([
       trainingStore.fetchPlans(),
       trainingStore.fetchTodayWorkout(),
+      trainingStore.fetchHistory(),
       aiConfigStore.fetchConfigs()
     ])
+    syncTodayWorkoutCompletion()
   } catch (error) {
     console.error('Failed to load training data:', error)
   } finally {
@@ -456,6 +583,7 @@ const loadHistory = async () => {
   loadingHistory.value = true
   try {
     await trainingStore.fetchHistory()
+    syncTodayWorkoutCompletion()
   } catch (error) {
     console.error('Failed to load history:', error)
   } finally {
@@ -488,11 +616,11 @@ const handleAssessmentSubmit = async (assessmentData) => {
     // Generate plan
     const defaultConfig = aiConfigStore.defaultConfig
     const planData = {
-      name: `${t('training.plans')} - ${new Date().toLocaleDateString()}`,
+      plan_name: `${t('training.plans')} - ${new Date().toLocaleDateString()}`,
       duration_weeks: 12,
       goal: 'general_fitness',
-      difficulty: assessmentData.experience_level === 'beginner' ? 'easy' : 
-                  assessmentData.experience_level === 'advanced' ? 'hard' : 'medium',
+      difficulty_level: assessmentData.experience_level === 'beginner' ? 'easy' : 
+                        assessmentData.experience_level === 'advanced' ? 'hard' : 'medium',
       ai_api_id: defaultConfig?.id
     }
     
@@ -513,26 +641,32 @@ const handleAssessmentSubmit = async (assessmentData) => {
 
 const startPollingTaskStatus = () => {
   generationProgress.value = 0
+  generationError.value = ''
+  isGeneratingTask.value = true
   generationInterval.value = setInterval(async () => {
     try {
       const response = await trainingService.checkTaskStatus(generationTaskId.value)
-      const task = response?.data?.task
+      const task = response?.data?.task || response?.data
       
       if (task) {
         generationProgress.value = task.progress || 0
         
         if (task.status === 'completed') {
           clearInterval(generationInterval.value)
+          isGeneratingTask.value = false
           showToast({ type: 'success', message: t('training.planReady') })
           await loadPlans()
           await trainingStore.fetchTodayWorkout()
         } else if (task.status === 'failed') {
           clearInterval(generationInterval.value)
+          isGeneratingTask.value = false
+          generationError.value = task.error_message || t('error.unknown')
           showToast({ type: 'fail', message: task.error_message || t('error.unknown') })
         }
       }
     } catch (error) {
       clearInterval(generationInterval.value)
+      isGeneratingTask.value = false
       console.error('Failed to check task status:', error)
     }
   }, 2000)
@@ -541,10 +675,15 @@ const startPollingTaskStatus = () => {
 const handleRecordSubmit = async (recordData) => {
   submittingRecord.value = true
   try {
+    if (isRecordedToday.value) {
+      showToast({ type: 'fail', message: t('training.noWorkoutToday') })
+      return
+    }
     await trainingStore.recordWorkout(recordData)
     showToast({ type: 'success', message: t('app.success') })
     showRecordForm.value = false
-    await trainingStore.fetchTodayWorkout()
+    await trainingStore.fetchHistory()
+    syncTodayWorkoutCompletion()
   } catch (error) {
     showToast({ type: 'fail', message: t('error.unknown') })
   } finally {
@@ -553,21 +692,81 @@ const handleRecordSubmit = async (recordData) => {
 }
 
 const startWorkout = (workout) => {
-  // Navigate to workout or show workout details
-  console.log('Starting workout:', workout)
+  if (!workout || !workout.exercises || workout.exercises.length === 0) {
+    showToast({ type: 'fail', message: t('training.noWorkoutToday') })
+    return
+  }
+  if (isRecordedToday.value) {
+    showToast({ type: 'success', message: t('training.completed') })
+    return
+  }
+  if (workout.type === 'rest') {
+    showToast({ type: 'success', message: t('training.restDay') })
+    return
+  }
+  showRecordForm.value = true
 }
 
-const viewWorkoutDetails = (workout) => {
-  console.log('Viewing workout:', workout)
+const viewWorkoutDetails = async () => {
+  if (currentPlan.value) {
+    await viewPlanDetails(currentPlan.value)
+    return
+  }
+  await loadPlans()
+  if (plans.value.length > 0) {
+    await viewPlanDetails(plans.value[0])
+    return
+  }
+  showToast({ type: 'fail', message: t('training.noPlanHint') })
 }
 
-const viewPlanDetails = (plan) => {
-  selectedPlan.value = plan
-  showPlanDetails.value = true
+const viewPlanDetails = async (plan) => {
+  try {
+    if (!plan?.plan_data) {
+      const response = await trainingStore.fetchPlan(plan.id)
+      selectedPlan.value = response?.data?.plan || response?.data || plan
+    } else {
+      selectedPlan.value = plan
+    }
+    showPlanDetails.value = true
+  } catch (error) {
+    showToast({ type: 'fail', message: t('error.unknown') })
+  }
 }
 
-const startPlanWorkout = (plan) => {
+const viewRecordDetails = (record) => {
+  selectedRecord.value = record
+  showRecordDetails.value = true
+}
+
+const startPlanWorkout = async (plan) => {
+  if (plan) {
+    trainingStore.currentPlan = plan
+  }
   activeTab.value = 'today'
+  loading.value = true
+  try {
+    await trainingStore.fetchTodayWorkout()
+    syncTodayWorkoutCompletion()
+    const workout = trainingStore.getTodayWorkout
+    if (!workout || !workout.exercises || workout.exercises.length === 0) {
+      showToast({ type: 'fail', message: t('training.noWorkoutToday') })
+      return
+    }
+    if (isRecordedToday.value) {
+      showToast({ type: 'success', message: t('training.completed') })
+      return
+    }
+    if (workout.type === 'rest') {
+      showToast({ type: 'success', message: t('training.restDay') })
+      return
+    }
+    showRecordForm.value = true
+  } catch (error) {
+    showToast({ type: 'fail', message: t('error.unknown') })
+  } finally {
+    loading.value = false
+  }
 }
 
 const selectExercise = (exercise, index) => {
@@ -581,12 +780,40 @@ const formatDate = (dateStr) => {
 
 const calendarFormatter = (day) => {
   // Mark days with workouts
-  const dateStr = day.date.toISOString().split('T')[0]
-  const hasWorkout = history.value.some(h => h.workout_date === dateStr)
+  const dateKey = getLocalDateKey(day.date)
+  const hasWorkout = history.value.some(h => h.workout_date === dateKey)
   if (hasWorkout) {
     day.bottomInfo = '●'
   }
   return day
+}
+
+const getRecordExercises = (record) => {
+  const exercises = record?.exercises
+  if (Array.isArray(exercises)) {
+    return exercises
+  }
+  if (exercises && Array.isArray(exercises.items)) {
+    return exercises.items
+  }
+  return []
+}
+
+const getPlanCompletedCount = (plan) => {
+  if (!plan?.id) return 0
+  return history.value.filter(record => record.plan_id === plan.id).length
+}
+
+const getPlanTotalCount = (plan) => {
+  return plan?.total_weeks || plan?.duration_weeks || 0
+}
+
+const formatPlanGoal = (plan) => {
+  const goal = plan?.training_purpose || plan?.goal
+  if (!goal) {
+    return t('training.goalUnknown')
+  }
+  return t(`training.goals.${goal}`)
 }
 
 const onCalendarConfirm = (date) => {
@@ -655,6 +882,22 @@ onMounted(() => {
   width: 80%;
 }
 
+.generation-error {
+  padding: 16px;
+}
+
+.generation-error .error-detail {
+  margin: 8px auto 16px;
+  max-width: 520px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #fff7e6;
+  border: 1px solid #ffd591;
+  color: #8c4a0d;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 .rest-day {
   text-align: center;
   padding: 40px 20px;
@@ -681,6 +924,16 @@ onMounted(() => {
   margin-top: 4px;
   font-size: 12px;
   color: var(--van-text-color-2);
+}
+
+.exercise-safety {
+  margin-top: 6px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: #f6f8fa;
+  color: var(--van-text-color-2);
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .completed-exercise {
@@ -751,6 +1004,33 @@ onMounted(() => {
   flex: 1;
   overflow-y: auto;
   padding: 16px 0;
+}
+
+.record-details-popup {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.record-details-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 0;
+}
+
+.record-exercise-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--van-text-color-2);
+}
+
+.record-exercise-notes {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--van-text-color-2);
 }
 
 .section-title {

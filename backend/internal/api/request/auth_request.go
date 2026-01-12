@@ -22,8 +22,9 @@ type RefreshTokenRequest struct {
 // 更新用户信息请求
 type UpdateUserRequest struct {
 	Username string `json:"username" binding:"omitempty,min=3,max=20,alphanum"`
+	Nickname string `json:"nickname" binding:"omitempty,min=1,max=50"`
 	Phone    string `json:"phone" binding:"omitempty,e164"`
-	Avatar   string `json:"avatar" binding:"omitempty,url,max=500"`
+	Avatar   string `json:"avatar" binding:"omitempty,avatar"`
 }
 
 // 更新密码请求

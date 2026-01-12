@@ -217,6 +217,7 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { showToast } from 'vant'
 import { sanitizeInput } from '@/utils/sanitizer'
 
 const { t } = useI18n()
@@ -252,9 +253,14 @@ const selectedDate = ref([
   new Date().getMinutes().toString().padStart(2, '0')
 ])
 
+const getLocalDateString = (date = new Date()) => {
+  const offsetMs = date.getTimezoneOffset() * 60 * 1000
+  return new Date(date.getTime() - offsetMs).toISOString().slice(0, 10)
+}
+
 const form = ref({
   meal_type: '',
-  meal_date: new Date().toISOString(),
+  meal_date: getLocalDateString(),
   foods: [createEmptyFood()],
   notes: ''
 })
@@ -373,7 +379,7 @@ const onMealTypeConfirm = ({ selectedOptions }) => {
 const onDateConfirm = ({ selectedValues }) => {
   const [year, month, day, hour, minute] = selectedValues
   const date = new Date(year, month - 1, day, hour, minute)
-  form.value.meal_date = date.toISOString()
+  form.value.meal_date = getLocalDateString(date)
   showDatePicker.value = false
 }
 
@@ -405,6 +411,11 @@ const togglePlanFood = (index) => {
 }
 
 const handleSubmit = () => {
+  if (!form.value.meal_type) {
+    showToast(t('nutrition.validation.mealTypeRequired'))
+    return
+  }
+
   let foods = []
   
   if (foodTab.value === 'plan') {
@@ -414,17 +425,30 @@ const handleSubmit = () => {
   }
 
   if (foods.length === 0) {
+    showToast(t('nutrition.validation.foodRequired'))
     return
   }
+
+  const normalizedFoods = foods.map(food => ({
+    name: food.name,
+    amount: food.amount,
+    unit: food.unit,
+    calories: food.calories,
+    protein: food.protein || 0,
+    carbs: food.carbs || 0,
+    fat: food.fat || 0,
+    fiber: food.fiber || 0
+  }))
 
   const mealData = {
     meal_type: form.value.meal_type,
     meal_date: form.value.meal_date,
-    foods,
-    total_calories: totalCalories.value,
-    total_protein: totalProtein.value,
-    total_carbs: totalCarbs.value,
-    total_fat: totalFat.value,
+    foods: { items: normalizedFoods },
+    calories: totalCalories.value,
+    protein: totalProtein.value,
+    carbs: totalCarbs.value,
+    fat: totalFat.value,
+    fiber: 0,
     notes: sanitizeInput(form.value.notes)
   }
 

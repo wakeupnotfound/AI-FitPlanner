@@ -14,12 +14,16 @@ type StatisticsService interface {
 	// GetTrainingStatistics calculates total workouts, duration, and calories
 	// Requirements: 10.1
 	GetTrainingStatistics(ctx context.Context, userID int64, period string) (*TrainingStats, error)
+	// GetTrainingStatisticsByRange calculates stats for a custom date range
+	GetTrainingStatisticsByRange(ctx context.Context, userID int64, startDate, endDate time.Time) (*TrainingStats, error)
 	// GetProgressReport compares current data with historical data
 	// Requirements: 10.2
 	GetProgressReport(ctx context.Context, userID int64) (*ProgressReport, error)
 	// CalculateTrends aggregates data by week or month
 	// Requirements: 10.3
 	CalculateTrends(ctx context.Context, userID int64, period string, count int) (*TrendsReport, error)
+	// CalculateTrendsByRange aggregates trend data for a custom date range
+	CalculateTrendsByRange(ctx context.Context, userID int64, period string, startDate, endDate time.Time) (*TrendsReport, error)
 }
 
 // TrainingStats represents aggregated training statistics
@@ -142,6 +146,35 @@ func (s *statisticsService) GetTrainingStatistics(ctx context.Context, userID in
 	}
 
 	// Calculate average duration
+	if stats.TotalWorkouts > 0 {
+		result.AverageDuration = float64(stats.TotalDuration) / float64(stats.TotalWorkouts)
+		result.HasSufficientData = true
+	} else {
+		result.HasSufficientData = false
+		result.Message = "该时间段内没有训练记录"
+	}
+
+	return result, nil
+}
+
+// GetTrainingStatisticsByRange calculates statistics for a custom date range
+func (s *statisticsService) GetTrainingStatisticsByRange(ctx context.Context, userID int64, startDate, endDate time.Time) (*TrainingStats, error) {
+	stats, err := s.trainingRecordRepo.GetStatistics(ctx, userID, startDate, endDate)
+	if err != nil {
+		return nil, errors.Wrap(err, errors.ErrDatabase, "获取训练统计失败")
+	}
+
+	result := &TrainingStats{
+		Period:         "custom",
+		StartDate:      startDate,
+		EndDate:        endDate,
+		TotalWorkouts:  stats.TotalWorkouts,
+		TotalDuration:  stats.TotalDuration,
+		TotalCalories:  stats.TotalCalories,
+		AverageRating:  stats.AverageRating,
+		WorkoutsByType: stats.WorkoutsByType,
+	}
+
 	if stats.TotalWorkouts > 0 {
 		result.AverageDuration = float64(stats.TotalDuration) / float64(stats.TotalWorkouts)
 		result.HasSufficientData = true
@@ -278,6 +311,79 @@ func (s *statisticsService) CalculateTrends(ctx context.Context, userID int64, p
 
 	// Check if we have sufficient data
 	// Requirements: 10.4 - handle insufficient data cases
+	hasData := false
+	for _, dp := range dataPoints {
+		if dp.TotalWorkouts > 0 {
+			hasData = true
+			break
+		}
+	}
+
+	if !hasData {
+		report.HasSufficientData = false
+		report.Message = "没有足够的训练数据来生成趋势报告"
+	} else {
+		report.HasSufficientData = true
+	}
+
+	return report, nil
+}
+
+// CalculateTrendsByRange aggregates trend data within a custom date range
+func (s *statisticsService) CalculateTrendsByRange(ctx context.Context, userID int64, period string, startDate, endDate time.Time) (*TrendsReport, error) {
+	if period != "week" && period != "month" {
+		return nil, errors.New(errors.ErrInvalidParam, "period必须是'week'或'month'")
+	}
+	if endDate.Before(startDate) {
+		return nil, errors.New(errors.ErrInvalidParam, "结束日期必须大于开始日期")
+	}
+
+	dataPoints := make([]TrendPoint, 0)
+	currentStart := startDate
+
+	for !currentStart.After(endDate) {
+		var currentEnd time.Time
+		var label string
+
+		if period == "week" {
+			currentEnd = currentStart.AddDate(0, 0, 6)
+			label = currentStart.Format("01/02") + " - " + currentEnd.Format("01/02")
+		} else {
+			currentEnd = currentStart.AddDate(0, 1, 0).AddDate(0, 0, -1)
+			label = currentStart.Format("2006-01")
+		}
+
+		if currentEnd.After(endDate) {
+			currentEnd = endDate
+		}
+
+		stats, err := s.trainingRecordRepo.GetStatistics(ctx, userID, currentStart, currentEnd)
+		if err != nil {
+			return nil, errors.Wrap(err, errors.ErrDatabase, "获取趋势数据失败")
+		}
+
+		dataPoints = append(dataPoints, TrendPoint{
+			PeriodLabel:   label,
+			StartDate:     currentStart,
+			EndDate:       currentEnd,
+			TotalWorkouts: stats.TotalWorkouts,
+			TotalDuration: stats.TotalDuration,
+			TotalCalories: stats.TotalCalories,
+			AverageRating: stats.AverageRating,
+		})
+
+		if period == "week" {
+			currentStart = currentStart.AddDate(0, 0, 7)
+		} else {
+			currentStart = currentStart.AddDate(0, 1, 0)
+		}
+	}
+
+	report := &TrendsReport{
+		Period:     period,
+		DataPoints: dataPoints,
+	}
+
 	hasData := false
 	for _, dp := range dataPoints {
 		if dp.TotalWorkouts > 0 {

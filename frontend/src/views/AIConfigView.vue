@@ -141,19 +141,27 @@ async function handleSubmit(formData) {
 }
 
 async function handleTestConnection(configId) {
+  if (!configId) {
+    showToast('配置ID无效')
+    return
+  }
+  
   testingId.value = configId
   try {
-    const result = await aiConfigStore.testConnection(configId)
-    if (result?.data?.test_result?.status === 'success') {
-      showSuccessToast(t('ai.testSuccess'))
-    } else {
-      showToast(t('ai.testFailed'))
-    }
-  } catch (err) {
-    showToast(t('ai.testFailed'))
-  } finally {
-    testingId.value = null
-  }
+        const result = await aiConfigStore.testConnection(configId)
+        if (result?.data?.test_result?.status === 'success') {
+          showSuccessToast(t('ai.testSuccess'))
+        } else {
+          const errorMsg = result?.test_result?.message || 
+                           result?.data?.test_result?.message || 
+                           t('ai.testFailed')
+          showToast(errorMsg)
+        }
+      } catch (err) {
+        showToast(t('ai.testFailed'))
+      } finally {
+        testingId.value = null
+      }
 }
 
 async function handleSetDefault(configId) {

@@ -7,7 +7,9 @@ import (
 	"time"
 
 	"github.com/ai-fitness-planner/backend/internal/model"
+	"github.com/ai-fitness-planner/backend/internal/pkg/logger"
 	"github.com/redis/go-redis/v9"
+	"go.uber.org/zap"
 )
 
 // SessionManager interface defines methods for session management
@@ -132,7 +134,9 @@ func (m *RedisSessionManager) DeleteAllUserSessions(ctx context.Context, userID 
 		sessionKey := fmt.Sprintf("session:%s", sessionID)
 		if err := m.client.Del(ctx, sessionKey).Err(); err != nil {
 			// Log error but continue deleting other sessions
-			fmt.Printf("Warning: failed to delete session %s: %v\n", sessionID, err)
+			logger.Warn("Failed to delete session",
+				zap.String("session_id", sessionID),
+				zap.Error(err))
 		}
 	}
 

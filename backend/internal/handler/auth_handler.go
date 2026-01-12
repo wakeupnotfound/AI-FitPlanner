@@ -73,6 +73,9 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	if authResp.User.Phone != nil {
 		resp.User.Phone = *authResp.User.Phone
 	}
+	if authResp.User.Nickname != nil {
+		resp.User.Nickname = *authResp.User.Nickname
+	}
 	if authResp.User.Avatar != nil {
 		resp.User.Avatar = *authResp.User.Avatar
 	}
@@ -130,6 +133,9 @@ func (h *AuthHandler) Login(c *gin.Context) {
 
 	if authResp.User.Phone != nil {
 		resp.User.Phone = *authResp.User.Phone
+	}
+	if authResp.User.Nickname != nil {
+		resp.User.Nickname = *authResp.User.Nickname
 	}
 	if authResp.User.Avatar != nil {
 		resp.User.Avatar = *authResp.User.Avatar

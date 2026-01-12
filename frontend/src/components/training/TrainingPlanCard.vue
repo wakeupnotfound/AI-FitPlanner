@@ -1,9 +1,10 @@
 <template>
-  <van-cell-group inset class="plan-card">
-    <van-cell :border="false">
+  <div class="plan-card-wrapper" @click="$emit('view', plan)">
+    <van-cell-group inset class="plan-card">
+      <van-cell :border="false">
       <template #title>
         <div class="plan-header">
-          <h3 class="plan-name">{{ plan.name }}</h3>
+          <h3 class="plan-name">{{ plan.plan_name || plan.name }}</h3>
           <van-tag :type="statusType" size="medium">
             {{ t(`training.${plan.status}`) }}
           </van-tag>
@@ -21,44 +22,45 @@
           </span>
         </div>
       </template>
-    </van-cell>
+      </van-cell>
     
-    <van-grid :column-num="3" :border="false" class="plan-stats">
+      <van-grid :column-num="3" :border="false" class="plan-stats">
       <van-grid-item>
-        <div class="stat-value">{{ t(`training.goals.${plan.goal}`) }}</div>
+        <div class="stat-value">{{ goalLabel }}</div>
         <div class="stat-label">{{ t('training.goal') }}</div>
       </van-grid-item>
-      <van-grid-item>
-        <div class="stat-value">{{ t(`training.difficultyLevels.${plan.difficulty_level || plan.difficulty}`) }}</div>
-        <div class="stat-label">{{ t('training.difficulty') }}</div>
-      </van-grid-item>
-      <van-grid-item>
-        <div class="stat-value">{{ completedWeeks }}/{{ plan.total_weeks || plan.duration_weeks }}</div>
-        <div class="stat-label">{{ t('training.completed') }}</div>
-      </van-grid-item>
-    </van-grid>
+        <van-grid-item>
+          <div class="stat-value">{{ t(`training.difficultyLevels.${plan.difficulty_level || plan.difficulty}`) }}</div>
+          <div class="stat-label">{{ t('training.difficulty') }}</div>
+        </van-grid-item>
+        <van-grid-item>
+          <div class="stat-value">{{ completedDisplay }}/{{ totalDisplay }}</div>
+          <div class="stat-label">{{ t('training.completed') }}</div>
+        </van-grid-item>
+      </van-grid>
 
-    <van-cell :border="false" v-if="showActions">
-      <div class="plan-actions">
-        <van-button 
-          size="small" 
-          type="primary" 
-          plain
-          @click="$emit('view', plan)"
-        >
-          {{ t('training.viewPlan') }}
-        </van-button>
-        <van-button 
-          v-if="plan.status === 'active'"
-          size="small" 
-          type="primary"
-          @click="$emit('start', plan)"
-        >
-          {{ t('training.startWorkout') }}
-        </van-button>
-      </div>
-    </van-cell>
-  </van-cell-group>
+      <van-cell :border="false" v-if="showActions">
+        <div class="plan-actions">
+          <van-button 
+            size="small" 
+            type="primary" 
+            plain
+            @click.stop="$emit('view', plan)"
+          >
+            {{ t('training.viewPlan') }}
+          </van-button>
+          <van-button 
+            v-if="plan.status === 'active'"
+            size="small" 
+            type="primary"
+            @click.stop="$emit('start', plan)"
+          >
+            {{ t('training.startWorkout') }}
+          </van-button>
+        </div>
+      </van-cell>
+    </van-cell-group>
+  </div>
 </template>
 
 <script setup>
@@ -71,6 +73,14 @@ const props = defineProps({
   plan: {
     type: Object,
     required: true
+  },
+  completedCount: {
+    type: Number,
+    default: null
+  },
+  totalCount: {
+    type: Number,
+    default: null
   },
   showActions: {
     type: Boolean,
@@ -103,6 +113,29 @@ const completedWeeks = computed(() => {
   return Math.min(Math.max(0, diffWeeks), totalWeeks)
 })
 
+const completedDisplay = computed(() => {
+  if (props.completedCount === null || props.completedCount === undefined) {
+    return completedWeeks.value
+  }
+  const total = props.totalCount || 0
+  return Math.min(props.completedCount, total)
+})
+
+const goalLabel = computed(() => {
+  const goal = props.plan.goal || props.plan.training_purpose
+  if (!goal) {
+    return t('training.goalUnknown')
+  }
+  return t(`training.goals.${goal}`)
+})
+
+const totalDisplay = computed(() => {
+  if (props.totalCount === null || props.totalCount === undefined) {
+    return props.plan.total_weeks || props.plan.duration_weeks
+  }
+  return props.totalCount
+})
+
 const formatDateRange = (startDate, endDate) => {
   if (!startDate) return ''
   const start = new Date(startDate).toLocaleDateString()
@@ -114,6 +147,10 @@ const formatDateRange = (startDate, endDate) => {
 <style scoped>
 .plan-card {
   margin: 12px 16px;
+}
+
+.plan-card-wrapper {
+  cursor: pointer;
 }
 
 .plan-header {

@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"strconv"
 	"time"
 
@@ -226,7 +227,7 @@ func (h *TrainingHandler) RecordTraining(c *gin.Context) {
 	}
 
 	// Parse workout date
-	workoutDate, err := time.Parse("2006-01-02", req.WorkoutDate)
+	workoutDate, err := time.ParseInLocation("2006-01-02", req.WorkoutDate, time.Local)
 	if err != nil {
 		h.BadRequest(c, "无效的训练日期格式")
 		return
@@ -259,7 +260,19 @@ func (h *TrainingHandler) RecordTraining(c *gin.Context) {
 	}
 
 	h.Created(c, gin.H{
-		"id":      record.ID,
+		"record": gin.H{
+			"id":               record.ID,
+			"plan_id":          record.PlanID,
+			"workout_date":     record.WorkoutDate.Format("2006-01-02"),
+			"workout_type":     record.WorkoutType,
+			"duration_minutes": record.DurationMinutes,
+			"exercises":        record.Exercises,
+			"performance_data": record.PerformanceData,
+			"notes":            record.Notes,
+			"rating":           record.Rating,
+			"injury_report":    record.InjuryReport,
+			"created_at":       record.CreatedAt,
+		},
 		"message": "训练记录已保存",
 	})
 }
@@ -291,7 +304,7 @@ func (h *TrainingHandler) ListTrainingRecords(c *gin.Context) {
 
 	// Use the trainingService's GetTrainingHistory method via type assertion
 	type historyGetter interface {
-		GetTrainingHistory(ctx interface{}, userID int64, startDate, endDate *time.Time) ([]*model.TrainingRecord, error)
+		GetTrainingHistory(ctx context.Context, userID int64, startDate, endDate *time.Time) ([]*model.TrainingRecord, error)
 	}
 
 	if getter, ok := h.trainingService.(historyGetter); ok {

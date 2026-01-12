@@ -177,7 +177,9 @@ export function supportsFeature(feature) {
     // Modern JavaScript features
     'async-await': (() => {
       try {
-        eval('(async () => {})')
+        // Use Function constructor instead of eval for security
+        const testAsync = new Function('return (async () => {})')
+        testAsync()
         return true
       } catch (e) {
         return false
@@ -187,7 +189,9 @@ export function supportsFeature(feature) {
     'fetch': 'fetch' in window,
     'arrow-functions': (() => {
       try {
-        eval('() => {}')
+        // Use Function constructor instead of eval for security
+        const testArrow = new Function('return () => {}')
+        testArrow()
         return true
       } catch (e) {
         return false

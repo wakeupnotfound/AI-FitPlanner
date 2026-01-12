@@ -12,8 +12,9 @@ import (
 // UpdateProfileRequest represents the profile update request data
 type UpdateProfileRequest struct {
 	Email  *string `json:"email" validate:"omitempty,email,max=100"`
+	Nickname *string `json:"nickname" validate:"omitempty,min=1,max=50"`
 	Phone  *string `json:"phone" validate:"omitempty,max=20"`
-	Avatar *string `json:"avatar" validate:"omitempty,url,max=255"`
+	Avatar *string `json:"avatar" validate:"omitempty,avatar"`
 }
 
 // BodyDataRequest represents the body data submission request
@@ -113,6 +114,10 @@ func (s *userService) UpdateProfile(ctx context.Context, userID int64, req *Upda
 		user.Phone = req.Phone
 	}
 
+	if req.Nickname != nil {
+		user.Nickname = req.Nickname
+	}
+
 	if req.Avatar != nil {
 		user.Avatar = req.Avatar
 	}
@@ -195,11 +200,27 @@ func (s *userService) SetFitnessGoals(ctx context.Context, userID int64, req *Fi
 		return nil, errors.ErrResourceNotFound
 	}
 
+	var initialWeight *float64
+	var initialBodyFat *float64
+	var initialMuscle *float64
+	if latestBodyData, err := s.bodyDataRepo.GetLatestByUserID(ctx, userID); err == nil && latestBodyData != nil {
+		initialWeight = &latestBodyData.Weight
+		if latestBodyData.BodyFatPercentage != nil {
+			initialBodyFat = latestBodyData.BodyFatPercentage
+		}
+		if latestBodyData.MusclePercentage != nil {
+			initialMuscle = latestBodyData.MusclePercentage
+		}
+	}
+
 	// Create fitness goal
 	goal := &model.FitnessGoal{
 		UserID:          userID,
 		GoalType:        req.GoalType,
 		GoalDescription: req.GoalDescription,
+		InitialWeight:   initialWeight,
+		InitialBodyFat:  initialBodyFat,
+		InitialMuscle:   initialMuscle,
 		TargetWeight:    req.TargetWeight,
 		Deadline:        req.Deadline,
 		Priority:        req.Priority,
