@@ -75,11 +75,8 @@
           enterkeyhint="next"
           clearable
           left-icon="lock"
-        >
-          <template #extra>
-            <span class="password-hint">至少8位，含大小写字母和数字</span>
-          </template>
-        </van-field>
+        />
+        <div class="password-hint-row">至少8位，含大小写字母和数字</div>
 
         <!-- Confirm Password Field -->
         <van-field
@@ -384,9 +381,10 @@ const handleSubmit = async () => {
   margin-left: 4px;
 }
 
-.password-hint {
+.password-hint-row {
+  margin: 4px 16px 8px;
   font-size: 12px;
   color: #999;
-  white-space: nowrap;
+  line-height: 1.4;
 }
 </style>

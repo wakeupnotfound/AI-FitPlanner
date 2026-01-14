@@ -73,6 +73,7 @@ import { useAuth } from '../composables/useAuth'
 
 const { t } = useI18n()
 const { login, loading, error } = useAuth()
+const toastDuration = 4000
 
 // Form data
 const formData = reactive({
@@ -88,7 +89,8 @@ const validateForm = () => {
   if (!formData.username.trim()) {
     showToast({
       message: t('auth.usernameRequired'),
-      type: 'fail'
+      type: 'fail',
+      duration: toastDuration
     })
     return false
   }
@@ -96,7 +98,8 @@ const validateForm = () => {
   if (!formData.password) {
     showToast({
       message: t('auth.passwordRequired'),
-      type: 'fail'
+      type: 'fail',
+      duration: toastDuration
     })
     return false
   }
@@ -104,7 +107,8 @@ const validateForm = () => {
   if (formData.password.length < 6) {
     showToast({
       message: t('auth.passwordMinLength'),
-      type: 'fail'
+      type: 'fail',
+      duration: toastDuration
     })
     return false
   }
@@ -129,13 +133,15 @@ const handleSubmit = async () => {
     
     showToast({
       message: t('auth.loginSuccess'),
-      type: 'success'
+      type: 'success',
+      duration: toastDuration
     })
   } catch (err) {
     // Error is already set in useAuth composable
     showToast({
       message: err.response?.data?.message || t('error.loginFailed'),
-      type: 'fail'
+      type: 'fail',
+      duration: toastDuration
     })
   }
 }
